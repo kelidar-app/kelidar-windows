@@ -37,7 +37,7 @@ Install the latest stable release of each package and check its current docs bef
 - Main returns typed error codes; the renderer maps them to translated messages.
 - Tests: unit tests for vault, parsers, importers and IPC schemas; integration tests against an in-process ssh2 Server; one Playwright smoke test per phase.
 - Before you say a step is done, run npm run typecheck, npm run lint and npm test. All three must pass.
-- Conventional Commits, one commit per step, and keep CHANGELOG.md up to date.
+- Conventional Commits, one commit per step. Release Please writes CHANGELOG.md and the version from the commit messages, so write each subject for users and never edit CHANGELOG.md or the version by hand. See CONTRIBUTING.md for the types and how releases work.
 
 ## Project documents
 - docs/FEATURES.md: every feature with its phase number

@@ -1,0 +1,132 @@
+name: Publish
+
+# Builds the Windows installer for a version tag and attaches it to the
+# GitHub Release, together with latest.yml (read by electron-updater),
+# the blockmap and SHA256SUMS.txt.
+#
+# Runs when:
+# - Release Please has just created a release (called from release-please.yml),
+# - someone pushes a v* tag by hand (the release is created from CHANGELOG.md
+#   if it does not exist yet),
+# - it is started by hand from the Actions tab to rebuild an existing tag.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Tag to build, for example v0.1.1
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to build, for example v0.1.1
+        required: true
+        type: string
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
+      GH_TOKEN: ${{ github.token }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+
+      - name: Check that the tag matches package.json
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "v${version}" != "${TAG}" ]; then
+            echo "::error::Tag ${TAG} does not match package.json version ${version}. Fix the version or the tag, then run this workflow again."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Smoke test (Playwright on Electron)
+        run: npm run test:e2e
+
+      - name: Build installer
+        run: npx electron-builder --config electron-builder.config.ts --win --x64 --publish never
+
+      - name: Write checksums
+        working-directory: dist
+        run: |
+          sha256sum *.exe > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Create the release if it does not exist
+        run: |
+          if gh release view "${TAG}" >/dev/null 2>&1; then
+            echo "Release ${TAG} already exists."
+            exit 0
+          fi
+          version="${TAG#v}"
+          # The CHANGELOG section for this version, without its heading.
+          awk -v v="[${version}]" '
+            /^## / { if (found) exit; if (index($0, "## " v) == 1) { found = 1; next } }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if [ ! -s release-notes.md ]; then
+            echo "::error::CHANGELOG.md has no section for ${version}. Add one, then run this workflow again."
+            exit 1
+          fi
+          flags=()
+          # Versions below 1.0.0 and versions such as 1.2.0-beta.1 are pre-releases.
+          if [[ "${version}" == 0.* || "${version}" == *-* ]]; then
+            flags+=(--prerelease)
+          fi
+          gh release create "${TAG}" --verify-tag --title "${TAG}" --notes-file release-notes.md "${flags[@]}"
+
+      - name: Upload installer to the release
+        run: |
+          gh release upload "${TAG}" --clobber \
+            dist/*.exe \
+            dist/*.exe.blockmap \
+            dist/latest.yml \
+            dist/SHA256SUMS.txt
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-${{ inputs.tag || github.ref_name }}
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore

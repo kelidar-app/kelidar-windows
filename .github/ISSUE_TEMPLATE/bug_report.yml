@@ -1,0 +1,58 @@
+name: Bug report
+description: Something does not work as it should.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Never paste passwords, private keys, passphrases or your vault file here.
+        Security problems go through [Report a vulnerability](https://github.com/kelidar-app/kelidar-windows/security/advisories/new), not a public issue.
+  - type: input
+    id: version
+    attributes:
+      label: Kelidar version
+      description: Shown in the installer file name (Kelidar-Setup-<version>-x64.exe) and in Windows Settings > Apps.
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: dropdown
+    id: windows
+    attributes:
+      label: Windows version
+      options:
+        - Windows 11
+        - Windows 10
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Include the exact error message if there was one.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Add a host with a key file
+        2. Connect
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: server
+    attributes:
+      label: Server details
+      description: The server's operating system and SSH server (for example Ubuntu 24.04, OpenSSH 9.6), and the sign-in method. Leave out host names and addresses if they are private.
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or anything else

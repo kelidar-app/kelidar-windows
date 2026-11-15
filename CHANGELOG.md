@@ -1,13 +1,19 @@
 # Changelog
 
-All notable changes to this project are documented here. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses
-[Semantic Versioning](https://semver.org/).
+All notable changes to this project are documented here. The project uses
+[Semantic Versioning](https://semver.org/). From 0.1.0 on,
+[Release Please](https://github.com/googleapis/release-please) writes each entry
+from the [Conventional Commit](https://www.conventionalcommits.org/) messages
+merged since the last release, so this file is not edited by hand.
 
-## [Unreleased]
+## [0.1.0](https://github.com/kelidar-app/kelidar-windows/releases/tag/v0.1.0) (2026-11-16)
+
+First preview build: phases 0 and 1 of the roadmap. Save a host, check its key and open a terminal.
 
 ### Added
 
+- Public repository files: README, MIT LICENSE, SECURITY.md, CONTRIBUTING.md, issue and pull request templates, and Dependabot for npm packages and GitHub Actions.
+- Releases: Release Please opens a release pull request from the Conventional Commit messages on `main`; merging it tags the version and a Windows workflow builds the installer and attaches it to the GitHub Release with `latest.yml`, the blockmap and `SHA256SUMS.txt`. Versions below 1.0.0 are marked as pre-releases.
 - Encrypted vault (`vault.json` in the user data folder): AES-256-GCM with a random 256-bit key wrapped by Windows DPAPI through Electron safeStorage (async API), a fresh nonce on every save, the header bound to the body, atomic saves and the ten newest backups in `vault-backups`. A damaged or changed vault is never overwritten. `--vault-self-test` checks the vault against the real safeStorage inside Electron.
 - Saved hosts: a Hosts list and a four-field form (name, address, user name, sign-in method) with the port under "More options". Sign in with a saved password, a password asked each time, or a private key file (OpenSSH, PEM or PuTTY) with an optional passphrase. The key file is picked in a native dialog run by main and imported into the vault; the renderer only gets the file name. Hosts can be edited and deleted (deleted records keep a tombstone and their secrets are wiped). Ctrl+N opens the form; Ctrl+E and Delete act on the focused host.
 - SSH sessions in main (`SessionManager` on ssh2): `session:open` returns a session id at once and progress arrives as typed states (connecting, verifying-host-key, authenticating, ready, closed, error); an `xterm-256color` shell with keepalive, resize and close; output sent in batches about every 8 ms with flow control (main stops reading from the server while the renderer is more than 1 MB behind). Sign-in tries the saved key or password, answers a single keyboard-interactive password question, and asks the user (three tries) when no password is saved. Sessions belong to the window that opened them and close when it reloads or closes.

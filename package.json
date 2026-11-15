@@ -1,9 +1,17 @@
 {
   "name": "kelidar-windows",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Free, open-source SSH manager for Windows",
   "license": "MIT",
   "author": "Kelidar contributors",
+  "homepage": "https://github.com/kelidar-app/kelidar-windows#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kelidar-app/kelidar-windows.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kelidar-app/kelidar-windows/issues"
+  },
   "private": true,
   "main": "./out/main/index.js",
   "engines": {
