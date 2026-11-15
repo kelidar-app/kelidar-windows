@@ -63,7 +63,21 @@
     "KEY_INVALID": "This file is not a private key {{appName}} can read. Choose an OpenSSH, PEM or PuTTY (.ppk) private key, not the .pub file.",
     "KEY_PASSPHRASE_REQUIRED": "This key is protected by a passphrase. Type the passphrase to use it.",
     "KEY_PASSPHRASE_WRONG": "The passphrase does not unlock this key. Check it and try again.",
-    "KEY_REQUIRED": "Choose the private key file to sign in with."
+    "KEY_REQUIRED": "Choose the private key file to sign in with.",
+    "SESSION_NOT_FOUND": "This connection is no longer open. Close the tab and connect again.",
+    "SESSION_LIMIT": "Too many tabs are open. Close some tabs, then connect again.",
+    "SSH_HOST_NOT_FOUND": "The server name could not be found. Check the address for typos and that you are connected to the internet or your VPN, then connect again.",
+    "SSH_CONNECTION_REFUSED": "The server refused the connection. Check the port (SSH usually uses 22) and that the SSH service is running on the server, then connect again.",
+    "SSH_NETWORK_UNREACHABLE": "The server cannot be reached from this network. Check your internet or VPN connection, then connect again.",
+    "SSH_TIMEOUT": "The server did not answer in time. Check the address and port, and that no firewall blocks SSH, then connect again.",
+    "SSH_CONNECTION_CLOSED_BY_SERVER": "The server closed the connection before sign-in finished. It may only accept some users or IP addresses. Check the server's SSH settings or ask its administrator, then connect again.",
+    "SSH_CONNECTION_LOST": "The connection was lost. Check your network, then connect again.",
+    "SSH_HOST_KEY_CHANGED": "The server's identity key is not the one you trusted before. Someone may be intercepting the connection, so {{appName}} stopped. If the server was reinstalled or its key was changed on purpose, check the new fingerprint with the server's administrator before you remove the old key.",
+    "SSH_HOST_KEY_REJECTED": "You did not trust the server's key, so {{appName}} did not connect. Connect again once you have checked the fingerprint.",
+    "SSH_AUTH_FAILED": "The server did not accept the user name, password or key. Check them in the host settings, then connect again.",
+    "SSH_ALGORITHM_MISMATCH": "{{appName}} and the server have no encryption method in common. The server may be very old or use unusual settings. Update the server's SSH software or ask its administrator.",
+    "SSH_SHELL_FAILED": "You are signed in, but the server did not open a terminal. The account may have no shell. Check the account on the server or ask its administrator.",
+    "SSH_FAILED": "The connection failed for an unexpected reason. Connect again. If it keeps failing, check that the server accepts SSH connections."
   },
   "common": {
     "save": "Save",
@@ -97,5 +111,19 @@
     "moreOptions": "More options",
     "port": "Port",
     "portInvalid": "Use a whole number from 1 to {{max}}."
+  },
+  "prompts": {
+    "hostKeyTitle": "Trust this server?",
+    "hostKeyBody": "This is the first connection to {{target}}. Make sure the fingerprint below matches the one from the server's administrator or hosting provider.",
+    "hostKeyHint": "Once trusted, {{appName}} remembers this key and stops the connection if it ever changes.",
+    "hostKeyTrust": "Trust and connect",
+    "fingerprint": "SHA-256 fingerprint",
+    "keyType": "Key type",
+    "passwordTitle": "Password for {{target}}",
+    "passwordRetry": "That password did not work. Try again.",
+    "connect": "Connect",
+    "keyboardTitle": "{{host}} asks",
+    "answer": "Answer",
+    "send": "Send"
   }
 }

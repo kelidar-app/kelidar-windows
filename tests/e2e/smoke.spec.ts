@@ -71,7 +71,7 @@ test('Phase 0 smoke: secure shell, typed IPC, and Persian mirrors the layout', a
     expect(await page.evaluate(() => 'require' in window || 'process' in window)).toBe(false)
     expect(
       await page.evaluate(() => Object.keys((window as unknown as { api: RendererApi }).api)),
-    ).toEqual(['invoke'])
+    ).toEqual(['invoke', 'on'])
 
     // Typed IPC round trip, and the preload/main refusals.
     expect(await api(page).invoke('app:getVersion')).toEqual({

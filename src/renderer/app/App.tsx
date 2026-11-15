@@ -1,6 +1,9 @@
 import { HostFormDialog } from '@renderer/features/hosts/HostForm'
 import { HostsView } from '@renderer/features/hosts/HostsView'
+import { PromptDialogs } from '@renderer/features/sessions/PromptDialogs'
 import { SettingsView } from '@renderer/features/settings/SettingsView'
+import { useEffect } from 'react'
+import { subscribeToPrompts } from '@renderer/stores/prompts'
 import { useUiStore } from '@renderer/stores/ui'
 import { useGlobalShortcuts } from './shortcuts'
 import { Sidebar } from './Sidebar'
@@ -11,6 +14,7 @@ export function App() {
   useGlobalShortcuts()
   useTitleBarOverlaySync()
   const section = useUiStore((state) => state.section)
+  useEffect(() => subscribeToPrompts(), [])
 
   return (
     <div className="flex h-full flex-col bg-background text-foreground">
@@ -22,6 +26,7 @@ export function App() {
         </main>
       </div>
       <HostFormDialog />
+      <PromptDialogs />
     </div>
   )
 }

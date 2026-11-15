@@ -2,7 +2,9 @@ import { randomUUID } from 'node:crypto'
 import type { HostView, ParsedHostSaveRequest } from '@shared/hosts'
 import { DEFAULT_SSH_PORT, type AuthRef, type HostRecord, type Id } from '@shared/records'
 import { AppError } from '../ipc/app-error'
+import type { Credential } from '../ssh/auth'
 import { describePublicKey, inspectPrivateKey } from '../ssh/keys'
+import type { ConnectTarget } from '../ssh/session-manager'
 import type { VaultService } from '../vault/service'
 import type { VaultData } from '../vault/vault'
 import type { KeyFileImports, PendingKeyFile } from './key-files'
@@ -223,5 +225,40 @@ export class HostService {
       host.deletedAt = now
       host.updatedAt = now
     })
+  }
+
+  /** Main only: everything a session needs, including the secret values. */
+  async connectTarget(id: Id): Promise<ConnectTarget> {
+    const data = (await this.vaults.get()).read()
+    const host = data.hosts.find((item) => item.id === id && live(item))
+    if (host === undefined) throw new AppError('HOST_NOT_FOUND')
+    const secret = (secretId: Id | undefined): string | undefined =>
+      data.secrets.find((item) => item.id === secretId && live(item))?.value
+
+    let credential: Credential = { type: 'ask' }
+    const auth = host.auth
+    if (auth?.type === 'password') {
+      const password = secret(auth.secretId)
+      if (password !== undefined) credential = { type: 'password', password }
+    } else if (auth?.type === 'key') {
+      const key = data.keys.find((item) => item.id === auth.keyId && live(item))
+      const privateKey = secret(key?.privateKeySecretId)
+      if (key === undefined || privateKey === undefined) throw new AppError('KEY_REQUIRED')
+      const passphrase = secret(key.passphraseSecretId)
+      credential = {
+        type: 'key',
+        privateKey,
+        keyName: key.name,
+        ...(passphrase === undefined ? {} : { passphrase }),
+      }
+    }
+    return {
+      hostId: host.id,
+      title: host.name,
+      address: host.address,
+      port: host.port ?? DEFAULT_SSH_PORT,
+      username: host.username ?? '',
+      credential,
+    }
   }
 }

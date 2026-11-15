@@ -2,7 +2,21 @@ import { z } from 'zod'
 import type { IpcError } from './errors'
 import { hostSaveRequestSchema, hostViewSchema, keyFileInfoSchema } from './hosts'
 import type { IpcChannel } from './ipc-channels'
+import type { IpcEvent } from './ipc-events'
 import { idSchema } from './records'
+import {
+  knownHostForgetSchema,
+  promptAnswerSchema,
+  sessionAckSchema,
+  sessionIdSchema,
+  sessionInputSchema,
+  sessionOpenRequestSchema,
+  sessionOpenResponseSchema,
+  sessionResizeSchema,
+  type PromptRequest,
+  type SessionDataEvent,
+  type SessionStateEvent,
+} from './session'
 import { uiSettingsPatchSchema, uiSettingsSchema } from './settings'
 
 /**
@@ -36,6 +50,36 @@ export const ipcContract = {
     request: noPayload,
     response: keyFileInfoSchema.nullable(),
   },
+  /** Removes the trusted server key for an address and port (after a changed-key warning). */
+  'knownHosts:forget': {
+    request: knownHostForgetSchema,
+    response: z.undefined(),
+  },
+  'prompt:answer': {
+    request: promptAnswerSchema,
+    response: z.undefined(),
+  },
+  /** Starts connecting and returns at once; progress arrives as session:state events. */
+  'session:open': {
+    request: sessionOpenRequestSchema,
+    response: sessionOpenResponseSchema,
+  },
+  'session:input': {
+    request: sessionInputSchema,
+    response: z.undefined(),
+  },
+  'session:resize': {
+    request: sessionResizeSchema,
+    response: z.undefined(),
+  },
+  'session:ack': {
+    request: sessionAckSchema,
+    response: z.undefined(),
+  },
+  'session:close': {
+    request: sessionIdSchema,
+    response: z.undefined(),
+  },
   'settings:get': {
     request: noPayload,
     response: uiSettingsSchema,
@@ -61,10 +105,21 @@ export type IpcResult<T> = { ok: true; data: T } | { ok: false; error: IpcError 
 export type IpcInvokeArgs<C extends IpcChannel> =
   undefined extends IpcRequest<C> ? [] : [payload: IpcRequest<C>]
 
+/** Payloads of the events main pushes to the renderer. Main is trusted, so these are types only. */
+export interface IpcEventPayloads {
+  'session:data': SessionDataEvent
+  'session:state': SessionStateEvent
+  'prompt:request': PromptRequest
+  'prompt:cancel': { promptId: string }
+}
+export type IpcEventPayload<E extends IpcEvent> = IpcEventPayloads[E]
+
 /** The one object the preload exposes to the renderer as `window.api`. */
 export interface RendererApi {
   invoke<C extends IpcChannel>(
     channel: C,
     ...args: IpcInvokeArgs<C>
   ): Promise<IpcResult<IpcResponse<C>>>
+  /** Subscribes to an event from main. Returns the unsubscribe function. */
+  on<E extends IpcEvent>(event: E, listener: (payload: IpcEventPayload<E>) => void): () => void
 }

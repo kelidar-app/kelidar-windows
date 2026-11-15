@@ -1,6 +1,6 @@
 import path from 'node:path'
 import os from 'node:os'
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme } from 'electron'
 import { APP_ORIGIN } from '@shared/app'
 import { pickDefaultLanguage, type Theme } from '@shared/settings'
 import { configureAppPaths } from './app-paths'
@@ -8,12 +8,17 @@ import { HostService } from './hosts/host-service'
 import { KeyFileImports } from './hosts/key-files'
 import { registerIpcHandlers } from './ipc/handlers'
 import { registerHostHandlers } from './ipc/host-handlers'
+import { registerSessionHandlers } from './ipc/session-handlers'
+import { createSinkRegistry } from './ipc/web-contents-sink'
 import { createIpcRouter } from './ipc/router'
 import { createOriginMatcher, createSenderCheck } from './ipc/sender'
 import { applyWindowsAppIdentity } from './platform/windows'
 import { handleAppProtocol, registerAppScheme } from './security/app-protocol'
 import { applyDevelopmentCsp, denyAllPermissions, denyNavigationAndPopups } from './security/harden'
 import { SettingsStore } from './settings/store'
+import { KnownHosts } from './ssh/host-keys'
+import { PromptBroker } from './ssh/prompts'
+import { SessionManager } from './ssh/session-manager'
 import { runVaultSelfTest, VAULT_SELF_TEST_FLAG } from './vault/self-test'
 import { createSafeStorageWrapper } from './vault/safe-storage-wrapper'
 import { VaultService } from './vault/service'
@@ -74,6 +79,9 @@ async function start(): Promise<void> {
   await app.whenReady()
 
   denyAllPermissions()
+  // No application menu: its accelerators (Ctrl+W closes the window, Ctrl+R
+  // reloads) would fight the terminal and tab shortcuts.
+  Menu.setApplicationMenu(null)
   handleAppProtocol(path.join(__dirname, '../renderer'))
   if (devServerUrl !== undefined) applyDevelopmentCsp(devServerUrl)
 
@@ -90,6 +98,22 @@ async function start(): Promise<void> {
   )
   const keyFiles = new KeyFileImports()
   const hosts = new HostService(vaults, keyFiles)
+  const prompts = new PromptBroker()
+  const knownHosts = new KnownHosts(vaults)
+  const sessions = new SessionManager({
+    resolveHost: (id) => hosts.connectTarget(id),
+    knownHosts,
+    prompts,
+    log: (message) => {
+      console.log(`[ssh] ${message}`)
+    },
+  })
+  const sinkOf = createSinkRegistry((sink) => {
+    sessions.closeAllFor(sink)
+  })
+  app.on('before-quit', () => {
+    sessions.closeAll()
+  })
 
   const applyTheme = (theme: Theme): void => {
     nativeTheme.themeSource = theme
@@ -137,6 +161,13 @@ async function start(): Promise<void> {
         : dialog.showOpenDialog(owner, options))
       return result.canceled ? null : (result.filePaths[0] ?? null)
     },
+  })
+
+  registerSessionHandlers(router, {
+    sessions,
+    prompts,
+    knownHosts,
+    ownerOf: (event) => sinkOf(event.sender),
   })
 
   registerIpcHandlers(router, {
