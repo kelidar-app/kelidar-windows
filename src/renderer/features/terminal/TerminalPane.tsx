@@ -1,4 +1,13 @@
-import { CircleAlert, LoaderCircle, PlugZap, RotateCw, Save, ShieldAlert, X } from 'lucide-react'
+import {
+  CircleAlert,
+  LoaderCircle,
+  Pencil,
+  PlugZap,
+  RotateCw,
+  Save,
+  ShieldAlert,
+  X,
+} from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatTarget } from '@shared/address'
@@ -6,7 +15,7 @@ import { Button } from '@renderer/components/ui/button'
 import { Dialog } from '@renderer/components/ui/dialog'
 import { api } from '@renderer/lib/api'
 import { cn } from '@renderer/lib/cn'
-import { useHostFormStore } from '@renderer/stores/hosts'
+import { useHostFormStore, useHostsStore } from '@renderer/stores/hosts'
 import { useTabsStore, type TerminalTab } from '@renderer/stores/tabs'
 import { TerminalView } from './TerminalView'
 
@@ -51,7 +60,19 @@ function SessionBanner({ tab }: { tab: TerminalTab }) {
   const reconnect = useTabsStore((state) => state.reconnect)
   const close = useTabsStore((state) => state.close)
   const [confirmForget, setConfirmForget] = useState(false)
+  const openEdit = useHostFormStore((state) => state.openEdit)
   const target = formatTarget(tab.target)
+  const source = tab.source
+  // A sign-in problem on a saved host: the fix is in the host settings.
+  const canEditHost =
+    source.kind === 'host' && (tab.error === 'SSH_AUTH_FAILED' || tab.error === 'KEY_REQUIRED')
+  const editHost = async (): Promise<void> => {
+    if (source.kind !== 'host') return
+    const store = useHostsStore.getState()
+    if (!store.loaded) await store.load()
+    const host = useHostsStore.getState().hosts.find((item) => item.id === source.hostId)
+    if (host !== undefined) openEdit(host)
+  }
 
   if (tab.state === 'ready') return null
 
@@ -124,6 +145,18 @@ function SessionBanner({ tab }: { tab: TerminalTab }) {
           >
             <RotateCw aria-hidden />
             {t('terminal.reconnect')}
+          </Button>
+        )}
+        {canEditHost && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              void editHost()
+            }}
+          >
+            <Pencil aria-hidden />
+            {t('terminal.editHost')}
           </Button>
         )}
         {hostKeyChanged && (

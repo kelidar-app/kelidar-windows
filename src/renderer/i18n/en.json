@@ -155,7 +155,8 @@
       "ready": "connected",
       "closed": "disconnected",
       "error": "connection problem"
-    }
+    },
+    "editHost": "Edit host"
   },
   "quickConnect": {
     "hint": "For example root@server.example.com:2222, or paste a whole ssh command with -p and -i.",

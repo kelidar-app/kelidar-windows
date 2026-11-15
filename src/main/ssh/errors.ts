@@ -54,6 +54,7 @@ export function mapConnectionError(error: unknown, context: FailureContext = {})
   if (code !== undefined && DROP_CODES.has(code)) {
     return context.wasReady === true ? 'SSH_CONNECTION_LOST' : 'SSH_CONNECTION_CLOSED_BY_SERVER'
   }
+  if (/connection lost before handshake/i.test(message)) return 'SSH_CONNECTION_CLOSED_BY_SERVER'
   if (level === 'client-authentication') return 'SSH_AUTH_FAILED'
   if (/no matching/i.test(message) && (level === 'handshake' || level === 'protocol')) {
     return 'SSH_ALGORITHM_MISMATCH'

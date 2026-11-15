@@ -44,6 +44,10 @@ describe('mapConnectionError', () => {
         sshError('Handshake failed: no matching C->S cipher', { level: 'handshake' }),
         'SSH_ALGORITHM_MISMATCH',
       ],
+      [
+        sshError('Connection lost before handshake', { level: 'protocol' }),
+        'SSH_CONNECTION_CLOSED_BY_SERVER',
+      ],
       [sshError('something odd'), 'SSH_FAILED'],
     ]
     for (const [error, code] of cases) expect(mapConnectionError(error), error.message).toBe(code)

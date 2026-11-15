@@ -155,7 +155,8 @@
       "ready": "وصل",
       "closed": "قطع",
       "error": "مشکل اتصال"
-    }
+    },
+    "editHost": "ویرایش هاست"
   },
   "quickConnect": {
     "hint": "مثلاً root@server.example.com:2222، یا یک دستور کامل ssh با -p و -i را بچسبانید.",
