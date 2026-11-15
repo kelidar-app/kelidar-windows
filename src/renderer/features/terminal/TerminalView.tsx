@@ -8,9 +8,10 @@ import { useTranslation } from 'react-i18next'
 import { api } from '@renderer/lib/api'
 import { onSessionData } from '@renderer/lib/session-events'
 import { usePrefersDark } from '@renderer/lib/use-prefers-dark'
+import { useSettingsStore } from '@renderer/stores/settings'
 import { tabTitle, type TerminalTab } from '@renderer/stores/tabs'
 import { registerTerminal } from './terminal-registry'
-import { DEFAULT_TERMINAL_THEME } from './themes'
+import { TERMINAL_THEMES } from './themes'
 import { installXtermStyleShim } from './xterm-csp'
 
 /** GPU rendering when available; xterm falls back to its DOM renderer otherwise. */
@@ -39,7 +40,8 @@ export function TerminalView({ tab, active }: { tab: TerminalTab; active: boolea
   const sessionRef = useRef(tab.sessionId)
   const readyRef = useRef(tab.state === 'ready')
   const dark = usePrefersDark()
-  const theme = dark ? DEFAULT_TERMINAL_THEME.dark : DEFAULT_TERMINAL_THEME.light
+  const themeId = useSettingsStore((state) => state.settings.terminalTheme)
+  const theme = dark ? TERMINAL_THEMES[themeId].dark : TERMINAL_THEMES[themeId].light
 
   useEffect(() => {
     sessionRef.current = tab.sessionId
@@ -61,7 +63,7 @@ export function TerminalView({ tab, active }: { tab: TerminalTab; active: boolea
       // No clipboard addon: a server cannot write to the clipboard (OSC 52).
       rightClickSelectsWord: false,
       macOptionIsMeta: false,
-      theme: DEFAULT_TERMINAL_THEME.dark,
+      theme: TERMINAL_THEMES.kelidar.dark,
       minimumContrastRatio: 1,
     })
     const fit = new FitAddon()

@@ -44,7 +44,15 @@
     "themeLight": "روشن",
     "themeDark": "تیره",
     "language": "زبان",
-    "languageHint": "با انتخاب فارسی، چیدمان راست‌به‌چپ می‌شود."
+    "languageHint": "با انتخاب فارسی، چیدمان راست‌به‌چپ می‌شود.",
+    "terminalTheme": "تم ترمینال",
+    "terminalThemeHint": "هر تم یک نسخه‌ی روشن و یک نسخه‌ی تیره دارد و از تم بالا پیروی می‌کند.",
+    "terminalThemes": {
+      "kelidar": "کلیدار",
+      "classic": "کلاسیک",
+      "soft": "ملایم",
+      "contrast": "کنتراست بالا"
+    }
   },
   "languages": {
     "en": "English",

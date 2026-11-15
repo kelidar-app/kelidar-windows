@@ -8,5 +8,11 @@
     "lib": ["ES2023", "DOM"],
     "types": ["node"]
   },
-  "include": ["tests/**/*", "src/main/**/*", "src/shared/**/*", "src/renderer/i18n/*.json"]
+  "include": [
+    "tests/**/*",
+    "src/main/**/*",
+    "src/shared/**/*",
+    "src/renderer/i18n/*.json",
+    "src/renderer/features/terminal/themes.ts"
+  ]
 }

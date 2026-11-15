@@ -8,11 +8,10 @@ export interface SettingsMigration {
   migrate: (data: SettingsData) => SettingsData
 }
 
-/**
- * Version 1 is the first released format, so there is nothing to migrate yet.
- * When SETTINGS_VERSION goes to 2, add `{ from: 1, migrate: (v1) => ({ ...v1, version: 2, ... }) }`.
- */
-export const SETTINGS_MIGRATIONS: readonly SettingsMigration[] = []
+/** One step per version. Version 2 added the terminal theme. */
+export const SETTINGS_MIGRATIONS: readonly SettingsMigration[] = [
+  { from: 1, migrate: (v1) => ({ ...v1, version: 2, terminalTheme: 'kelidar' }) },
+]
 
 export type MigrationResult =
   | { status: 'ok'; data: SettingsData; migrated: boolean }

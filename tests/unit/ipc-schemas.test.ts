@@ -24,6 +24,8 @@ describe('IPC contract', () => {
     const schema = ipcContract['settings:update'].request
     expect(schema.safeParse({ language: 'fa' }).success).toBe(true)
     expect(schema.safeParse({ theme: 'dark', language: 'en' }).success).toBe(true)
+    expect(schema.safeParse({ terminalTheme: 'soft' }).success).toBe(true)
+    expect(schema.safeParse({ terminalTheme: 'neon' }).success).toBe(false)
     expect(schema.safeParse({ theme: 'blue' }).success).toBe(false)
     expect(schema.safeParse({ window: { width: 800 } }).success).toBe(false)
     expect(schema.safeParse({}).success).toBe(false)

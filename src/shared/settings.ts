@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 /** Bump this and add a migration in src/main/settings/migrations.ts when the shape changes. */
-export const SETTINGS_VERSION = 1
+export const SETTINGS_VERSION = 2
 
 export const LANGUAGES = ['en', 'fa'] as const
 export const languageSchema = z.enum(LANGUAGES)
@@ -10,6 +10,11 @@ export type Language = z.infer<typeof languageSchema>
 export const THEMES = ['system', 'light', 'dark'] as const
 export const themeSchema = z.enum(THEMES)
 export type Theme = z.infer<typeof themeSchema>
+
+/** Built-in terminal themes; each has a light and a dark variant. */
+export const TERMINAL_THEME_IDS = ['kelidar', 'classic', 'soft', 'contrast'] as const
+export const terminalThemeSchema = z.enum(TERMINAL_THEME_IDS)
+export type TerminalThemeId = z.infer<typeof terminalThemeSchema>
 
 const pixels = z.int().min(-100_000).max(100_000)
 
@@ -27,6 +32,7 @@ export const settingsFileSchema = z.object({
   version: z.literal(SETTINGS_VERSION),
   language: languageSchema,
   theme: themeSchema,
+  terminalTheme: terminalThemeSchema,
   window: windowStateSchema.optional(),
 })
 export type SettingsFile = z.infer<typeof settingsFileSchema>
@@ -35,6 +41,7 @@ export type SettingsFile = z.infer<typeof settingsFileSchema>
 export const uiSettingsSchema = z.object({
   language: languageSchema,
   theme: themeSchema,
+  terminalTheme: terminalThemeSchema,
 })
 export type UiSettings = z.infer<typeof uiSettingsSchema>
 
@@ -42,11 +49,16 @@ export const uiSettingsPatchSchema = z
   .strictObject({
     language: languageSchema.optional(),
     theme: themeSchema.optional(),
+    terminalTheme: terminalThemeSchema.optional(),
   })
   .refine((patch) => Object.keys(patch).length > 0, { message: 'Empty patch' })
 export type UiSettingsPatch = z.infer<typeof uiSettingsPatchSchema>
 
-export const DEFAULT_UI_SETTINGS: UiSettings = { language: 'en', theme: 'system' }
+export const DEFAULT_UI_SETTINGS: UiSettings = {
+  language: 'en',
+  theme: 'system',
+  terminalTheme: 'kelidar',
+}
 
 /** Persian when the system prefers it, otherwise English. */
 export function pickDefaultLanguage(preferred: readonly string[]): Language {

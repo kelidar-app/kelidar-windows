@@ -58,7 +58,11 @@ describe('IPC router', () => {
 
   it('refuses payloads that do not match the schema', async () => {
     const { router, call } = setup()
-    const handler = vi.fn(() => ({ language: 'en' as const, theme: 'system' as const }))
+    const handler = vi.fn(() => ({
+      language: 'en' as const,
+      theme: 'system' as const,
+      terminalTheme: 'kelidar' as const,
+    }))
     const versionHandler = vi.fn(() => ({ version: '1.2.3' }))
     router.handle('settings:update', handler)
     router.handle('app:getVersion', versionHandler)
@@ -79,7 +83,11 @@ describe('IPC router', () => {
 
   it('passes the parsed payload to the handler', async () => {
     const { router, call } = setup()
-    const handler = vi.fn(() => ({ language: 'fa' as const, theme: 'dark' as const }))
+    const handler = vi.fn(() => ({
+      language: 'fa' as const,
+      theme: 'dark' as const,
+      terminalTheme: 'soft' as const,
+    }))
     router.handle('settings:update', handler)
     await call('settings:update', trusted, { theme: 'dark' })
     expect(handler).toHaveBeenCalledWith({ theme: 'dark' }, expect.anything())
@@ -88,12 +96,17 @@ describe('IPC router', () => {
   it('strips fields the response schema does not declare', async () => {
     const { router, call } = setup()
     router.handle('settings:get', () => {
-      const withExtra = { language: 'en' as const, theme: 'light' as const, window: { width: 1 } }
+      const withExtra = {
+        language: 'en' as const,
+        theme: 'light' as const,
+        terminalTheme: 'classic' as const,
+        window: { width: 1 },
+      }
       return withExtra
     })
     await expect(call('settings:get', trusted)).resolves.toEqual({
       ok: true,
-      data: { language: 'en', theme: 'light' },
+      data: { language: 'en', theme: 'light', terminalTheme: 'classic' },
     })
   })
 

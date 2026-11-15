@@ -24,7 +24,7 @@ export interface SettingsStoreOptions {
 }
 
 function defaults(language: Language): SettingsFile {
-  return { version: SETTINGS_VERSION, language, theme: 'system' }
+  return { version: SETTINGS_VERSION, language, theme: 'system', terminalTheme: 'kelidar' }
 }
 
 function isMissingFile(error: unknown): boolean {
@@ -105,7 +105,11 @@ export class SettingsStore {
   }
 
   getUi(): UiSettings {
-    return { language: this.current.language, theme: this.current.theme }
+    return {
+      language: this.current.language,
+      theme: this.current.theme,
+      terminalTheme: this.current.terminalTheme,
+    }
   }
 
   async updateUi(patch: UiSettingsPatch): Promise<UiSettings> {

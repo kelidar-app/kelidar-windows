@@ -44,7 +44,15 @@
     "themeLight": "Light",
     "themeDark": "Dark",
     "language": "Language",
-    "languageHint": "The layout switches to right-to-left for Persian."
+    "languageHint": "The layout switches to right-to-left for Persian.",
+    "terminalTheme": "Terminal theme",
+    "terminalThemeHint": "Each theme has a light and a dark version and follows the theme above.",
+    "terminalThemes": {
+      "kelidar": "Kelidar",
+      "classic": "Classic",
+      "soft": "Soft",
+      "contrast": "High contrast"
+    }
   },
   "languages": {
     "en": "English",
