@@ -1,4 +1,4 @@
-import { app, BrowserWindow, type IpcMainInvokeEvent } from 'electron'
+import { app, BrowserWindow, clipboard, type IpcMainInvokeEvent } from 'electron'
 import { TITLE_BAR_HEIGHT } from '@shared/app'
 import type { Theme } from '@shared/settings'
 import type { SettingsStore } from '../settings/store'
@@ -15,6 +15,13 @@ export function registerIpcHandlers(
   deps: HandlerDeps,
 ): void {
   router.handle('app:getVersion', () => ({ version: app.getVersion() }))
+
+  router.handle('clipboard:readText', async () => ({ text: await clipboard.readText() }))
+
+  router.handle('clipboard:writeText', async ({ text }) => {
+    await clipboard.writeText(text)
+    return undefined
+  })
 
   router.handle('settings:get', () => deps.settings.getUi())
 

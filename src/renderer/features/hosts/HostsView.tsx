@@ -3,6 +3,7 @@ import {
   LockKeyhole,
   MessageSquareMore,
   Pencil,
+  Play,
   Plus,
   Server,
   Trash2,
@@ -16,6 +17,7 @@ import { SHORTCUTS } from '@renderer/app/shortcuts'
 import { Button } from '@renderer/components/ui/button'
 import { Dialog } from '@renderer/components/ui/dialog'
 import { useHostFormStore, useHostsStore } from '@renderer/stores/hosts'
+import { useTabsStore } from '@renderer/stores/tabs'
 import { QuickConnect } from './QuickConnect'
 
 export function HostsView() {
@@ -26,6 +28,7 @@ export function HostsView() {
   const load = useHostsStore((state) => state.load)
   const openNew = useHostFormStore((state) => state.openNew)
   const [deleting, setDeleting] = useState<HostView | null>(null)
+  const openError = useTabsStore((state) => state.openError)
 
   useEffect(() => {
     void load()
@@ -55,12 +58,12 @@ export function HostsView() {
         <QuickConnect />
       </div>
 
-      {error !== null && (
+      {(error ?? openError) !== null && (
         <p
           role="alert"
           className="mx-6 mt-4 rounded-md border border-destructive px-3 py-2 text-sm text-destructive"
         >
-          {t(`errors.${error}`)}
+          {t(`errors.${error ?? openError ?? 'INTERNAL'}`)}
         </p>
       )}
 
@@ -123,11 +126,18 @@ function SignInIcon({ host }: { host: HostView }) {
 function HostRow({ host, onDelete }: { host: HostView; onDelete: () => void }) {
   const { t } = useTranslation()
   const openEdit = useHostFormStore((state) => state.openEdit)
+  const openHost = useTabsStore((state) => state.openHost)
   const target = formatTarget(host)
+  const connect = (): void => {
+    void openHost(host.id)
+  }
 
   const onKeyDown = (event: KeyboardEvent<HTMLLIElement>): void => {
     if (event.target !== event.currentTarget) return
-    if (event.key === 'Delete') {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      connect()
+    } else if (event.key === 'Delete') {
       event.preventDefault()
       onDelete()
     } else if (event.key.toLowerCase() === 'e' && event.ctrlKey) {
@@ -140,9 +150,12 @@ function HostRow({ host, onDelete }: { host: HostView; onDelete: () => void }) {
     <li
       tabIndex={0}
       aria-label={t('hosts.rowLabel', { name: host.name, target })}
-      aria-keyshortcuts="Control+E Delete"
+      aria-keyshortcuts="Enter Control+E Delete"
       data-host-id={host.id}
       onKeyDown={onKeyDown}
+      onDoubleClick={(event) => {
+        if (!(event.target instanceof Element) || event.target.closest('button') === null) connect()
+      }}
       className="group flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2 hover:bg-muted"
     >
       <Server aria-hidden className="size-4 shrink-0 text-primary" />
@@ -153,6 +166,15 @@ function HostRow({ host, onDelete }: { host: HostView; onDelete: () => void }) {
         </span>
       </div>
       <SignInIcon host={host} />
+      <Button
+        size="sm"
+        aria-label={t('hosts.connect', { name: host.name })}
+        title={t('nav.withShortcut', { label: t('hosts.connectShort'), shortcut: 'Enter' })}
+        onClick={connect}
+      >
+        <Play aria-hidden />
+        {t('hosts.connectShort')}
+      </Button>
       <Button
         variant="ghost"
         size="icon"

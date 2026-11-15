@@ -1,9 +1,11 @@
+import { useEffect } from 'react'
 import { HostFormDialog } from '@renderer/features/hosts/HostForm'
 import { HostsView } from '@renderer/features/hosts/HostsView'
 import { PromptDialogs } from '@renderer/features/sessions/PromptDialogs'
 import { SettingsView } from '@renderer/features/settings/SettingsView'
-import { useEffect } from 'react'
+import { TerminalPane } from '@renderer/features/terminal/TerminalPane'
 import { subscribeToPrompts } from '@renderer/stores/prompts'
+import { HOME_TAB, startTabs, useTabsStore } from '@renderer/stores/tabs'
 import { useUiStore } from '@renderer/stores/ui'
 import { useGlobalShortcuts } from './shortcuts'
 import { Sidebar } from './Sidebar'
@@ -14,15 +16,25 @@ export function App() {
   useGlobalShortcuts()
   useTitleBarOverlaySync()
   const section = useUiStore((state) => state.section)
-  useEffect(() => subscribeToPrompts(), [])
+  const tabs = useTabsStore((state) => state.tabs)
+  const activeId = useTabsStore((state) => state.activeId)
+  useEffect(() => {
+    startTabs()
+    return subscribeToPrompts()
+  }, [])
 
+  const homeActive = activeId === HOME_TAB
   return (
     <div className="flex h-full flex-col bg-background text-foreground">
       <TitleBar />
       <div className="flex min-h-0 flex-1">
         <Sidebar />
         <main className="flex min-w-0 flex-1 flex-col">
-          {section === 'hosts' ? <HostsView /> : <SettingsView />}
+          {homeActive && (section === 'hosts' ? <HostsView /> : <SettingsView />)}
+          {/* Terminals stay mounted while hidden, so their scrollback survives. */}
+          {tabs.map((tab) => (
+            <TerminalPane key={tab.id} tab={tab} active={tab.id === activeId} />
+          ))}
         </main>
       </div>
       <HostFormDialog />

@@ -1,7 +1,8 @@
+import { createHash } from 'node:crypto'
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { createOriginMatcher, createSenderCheck, originOf } from '../../src/main/ipc/sender'
-import { developmentCsp, PRODUCTION_CSP } from '../../src/main/security/csp'
+import { developmentCsp, EMPTY_STYLE_HASH, PRODUCTION_CSP } from '../../src/main/security/csp'
 import { isSafeExternalUrl } from '../../src/main/security/external-url'
 import { mimeTypeFor, resolveRendererPath } from '../../src/main/security/renderer-path'
 
@@ -99,6 +100,13 @@ describe('Content Security Policy', () => {
     expect(PRODUCTION_CSP).toContain("script-src 'self'")
     expect(PRODUCTION_CSP).toContain("object-src 'none'")
     expect(PRODUCTION_CSP).not.toMatch(/unsafe-inline|unsafe-eval|https?:|data:|\*/)
+  })
+
+  it('allows only the empty inline style, by hash', () => {
+    const emptyHash = createHash('sha256').update('').digest('base64')
+    expect(EMPTY_STYLE_HASH).toBe(`'sha256-${emptyHash}'`)
+    expect(PRODUCTION_CSP.match(/'sha256-[^']+'/g)).toEqual([EMPTY_STYLE_HASH])
+    expect(PRODUCTION_CSP).not.toContain('unsafe-hashes')
   })
 
   it('limits the development policy to the dev server', () => {

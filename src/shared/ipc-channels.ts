@@ -4,6 +4,8 @@
  */
 export const IPC_CHANNELS = [
   'app:getVersion',
+  'clipboard:readText',
+  'clipboard:writeText',
   'hosts:list',
   'hosts:save',
   'hosts:delete',

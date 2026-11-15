@@ -1,6 +1,7 @@
 import { Cable, FolderOpen, Server, Settings, SquareCode, type LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@renderer/lib/cn'
+import { HOME_TAB, useTabsStore } from '@renderer/stores/tabs'
 import { useUiStore, type SectionId } from '@renderer/stores/ui'
 import { SHORTCUTS } from './shortcuts'
 
@@ -31,12 +32,13 @@ const SETTINGS_ITEM: NavItem = {
 function NavButton({ item }: { item: NavItem }) {
   const { t } = useTranslation()
   const current = useUiStore((state) => state.section)
+  const homeActive = useTabsStore((state) => state.activeId === HOME_TAB)
   const showSection = useUiStore((state) => state.showSection)
   const label = t(`nav.${item.key}`)
   const Icon = item.icon
   const section = item.section
   const enabled = section !== undefined
-  const active = enabled && current === section
+  const active = enabled && homeActive && current === section
   const tooltip = enabled
     ? item.shortcut === undefined
       ? label

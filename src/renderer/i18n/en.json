@@ -2,7 +2,9 @@
   "titleBar": {
     "tabs": "Open tabs",
     "homeTab": "Home",
-    "newTab": "New tab"
+    "newTab": "New tab",
+    "closeTab": "Close {{title}}",
+    "renameTab": "Tab name"
   },
   "nav": {
     "label": "Main",
@@ -31,7 +33,9 @@
     "signInKey": "Signs in with a private key",
     "signInAsk": "Asks for the password",
     "deleteTitle": "Delete {{name}}?",
-    "deleteBody": "The host and its saved password or key are removed from this computer. Server keys you trusted stay saved."
+    "deleteBody": "The host and its saved password or key are removed from this computer. Server keys you trusted stay saved.",
+    "connect": "Connect to {{name}}",
+    "connectShort": "Connect"
   },
   "settings": {
     "title": "Settings",
@@ -125,5 +129,29 @@
     "keyboardTitle": "{{host}} asks",
     "answer": "Answer",
     "send": "Send"
+  },
+  "terminal": {
+    "label": "Terminal: {{title}}",
+    "connecting": "Connecting to {{target}}…",
+    "verifying": "Checking the server's identity…",
+    "authenticating": "Signing in…",
+    "failed": "Not connected to {{target}}",
+    "disconnected": "Disconnected from {{target}}.",
+    "reconnect": "Connect again",
+    "reconnected": "connected again",
+    "closeTab": "Close tab",
+    "newFingerprint": "Fingerprint the server shows now:",
+    "forgetKey": "Remove the old key…",
+    "forgetKeyTitle": "Remove the trusted key?",
+    "forgetKeyBody": "Only do this if you know why the server's key changed, for example because the server was reinstalled. {{appName}} forgets the old key for {{target}} and asks you to check the new fingerprint before connecting.",
+    "forgetKeyConfirm": "Remove and connect",
+    "state": {
+      "connecting": "connecting",
+      "verifying-host-key": "checking the server's identity",
+      "authenticating": "signing in",
+      "ready": "connected",
+      "closed": "disconnected",
+      "error": "connection problem"
+    }
   }
 }

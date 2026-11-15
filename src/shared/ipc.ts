@@ -33,6 +33,16 @@ export const ipcContract = {
     request: noPayload,
     response: z.object({ version: z.string() }),
   },
+  /** Terminal paste: the user's clipboard text, read in main on request. */
+  'clipboard:readText': {
+    request: noPayload,
+    response: z.object({ text: z.string() }),
+  },
+  /** Terminal copy-on-select. Never used for secrets: main copies those itself. */
+  'clipboard:writeText': {
+    request: z.strictObject({ text: z.string().max(10_000_000) }),
+    response: z.undefined(),
+  },
   'hosts:list': {
     request: noPayload,
     response: z.array(hostViewSchema),

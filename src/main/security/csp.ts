@@ -1,11 +1,19 @@
 /**
+ * SHA-256 of the empty string. xterm.js appends empty <style> elements before
+ * it fills them (their text goes to constructed stylesheets instead, see
+ * src/renderer/features/terminal/xterm-csp.ts). This hash allows exactly an
+ * empty inline style and nothing else.
+ */
+export const EMPTY_STYLE_HASH = "'sha256-47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU='"
+
+/**
  * Content Security Policy for the packaged renderer (served from app://).
  * No inline scripts or styles, no remote content, no plugins, no framing.
  */
 export const PRODUCTION_CSP = [
   "default-src 'none'",
   "script-src 'self'",
-  "style-src 'self'",
+  `style-src 'self' ${EMPTY_STYLE_HASH}`,
   "img-src 'self'",
   "font-src 'self'",
   "connect-src 'self'",
