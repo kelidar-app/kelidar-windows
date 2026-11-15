@@ -8,6 +8,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Encrypted vault (`vault.json` in the user data folder): AES-256-GCM with a random 256-bit key wrapped by Windows DPAPI through Electron safeStorage (async API), a fresh nonce on every save, the header bound to the body, atomic saves and the ten newest backups in `vault-backups`. A damaged or changed vault is never overwritten. `--vault-self-test` checks the vault against the real safeStorage inside Electron.
 - Phase 0 foundation: Electron, electron-vite, React and strict TypeScript project with ESLint, Prettier, Vitest and Playwright.
 - Secure main window: context isolation, sandbox, no Node integration, the app served from `app://` with a strict Content Security Policy, navigation and new windows denied, all permission requests denied, single-instance lock.
 - Electron fuses applied to the packaged app (no RunAsNode, no NODE_OPTIONS, no inspector flags, asar integrity check, app loads only from asar).

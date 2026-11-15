@@ -10,7 +10,7 @@ import {
   type WindowState,
 } from '@shared/settings'
 import { AppError } from '../ipc/app-error'
-import { writeFileAtomic } from './atomic-write'
+import { writeFileAtomic } from '../fs/atomic-write'
 import { migrateSettings, SETTINGS_MIGRATIONS, type SettingsMigration } from './migrations'
 
 export const SETTINGS_FILE_NAME = 'settings.json'

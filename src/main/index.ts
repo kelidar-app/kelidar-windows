@@ -11,11 +11,22 @@ import { applyWindowsAppIdentity } from './platform/windows'
 import { handleAppProtocol, registerAppScheme } from './security/app-protocol'
 import { applyDevelopmentCsp, denyAllPermissions, denyNavigationAndPopups } from './security/harden'
 import { SettingsStore } from './settings/store'
+import { runVaultSelfTest, VAULT_SELF_TEST_FLAG } from './vault/self-test'
+import { createSafeStorageWrapper } from './vault/safe-storage-wrapper'
 import { createMainWindow } from './window'
 
 configureAppPaths()
 
-if (!app.requestSingleInstanceLock()) {
+if (process.argv.includes(VAULT_SELF_TEST_FLAG)) {
+  // `<app> --vault-self-test`: checks the vault against the real safeStorage,
+  // prints {"ok":true|false,...} (check names only) and exits. No window.
+  void app.whenReady().then(async () => {
+    const result = await runVaultSelfTest(createSafeStorageWrapper())
+    process.stdout.write(`${JSON.stringify(result)}
+`)
+    app.exit(result.ok ? 0 : 1)
+  })
+} else if (!app.requestSingleInstanceLock()) {
   // Another instance owns this userData folder; it brings its window forward.
   app.quit()
 } else {
