@@ -25,6 +25,8 @@
     "lint": "eslint . --max-warnings=0",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "lockfile:check": "node scripts/lockfile-registry.mjs",
+    "lockfile:fix": "node scripts/lockfile-registry.mjs --fix",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",

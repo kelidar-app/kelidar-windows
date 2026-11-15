@@ -44,6 +44,11 @@ npm test
 
 If you changed the user interface, also run `npm run build` and `npm run test:e2e`.
 
+If you install packages through an npm mirror, npm writes the mirror's URLs into
+`package-lock.json`, and CI and Dependabot cannot download from them. After adding or updating a
+package, run `npm run lockfile:fix` and commit the lockfile. Your mirror keeps working locally,
+because npm swaps `registry.npmjs.org` for your configured registry when it reads the lockfile.
+
 ## Commit messages
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/). Release Please reads
