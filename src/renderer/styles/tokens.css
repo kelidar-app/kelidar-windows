@@ -1,0 +1,90 @@
+/*
+ * Design tokens: the one place for colors, radii and fonts.
+ * Light and dark follow Windows through prefers-color-scheme; main sets
+ * nativeTheme.themeSource from the user's choice (System, Light, Dark).
+ * Colors are hex because the window controls overlay only accepts #rrggbb.
+ */
+
+:root {
+  --background: #f7f7f8;
+  --foreground: #1b1b1f;
+  --card: #ffffff;
+  --card-foreground: #1b1b1f;
+  --muted: #ececef;
+  --muted-foreground: #5c5d66;
+  --border: #dcdce1;
+  --input: #c6c6cd;
+  --ring: #0f766e;
+  --primary: #0f766e;
+  --primary-foreground: #ffffff;
+  --accent: #e3f1ef;
+  --accent-foreground: #0d4f49;
+  --destructive: #b42318;
+  --destructive-foreground: #ffffff;
+  --sidebar: #efeff2;
+  --sidebar-foreground: #2b2c33;
+  --titlebar: #e7e7eb;
+  --titlebar-foreground: #1b1b1f;
+
+  --radius: 0.5rem;
+  --font-ui: 'Segoe UI Variable Text', 'Segoe UI', system-ui, sans-serif;
+  --font-ui-fa: 'Vazirmatn Variable', 'Segoe UI', system-ui, sans-serif;
+  --font-code: 'Cascadia Mono', Consolas, monospace;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #1c1c1f;
+    --foreground: #ececef;
+    --card: #242428;
+    --card-foreground: #ececef;
+    --muted: #2c2c31;
+    --muted-foreground: #a3a3ad;
+    --border: #36363d;
+    --input: #4a4a52;
+    --ring: #2dd4bf;
+    --primary: #2dd4bf;
+    --primary-foreground: #042f2b;
+    --accent: #173936;
+    --accent-foreground: #b4efe6;
+    --destructive: #f97066;
+    --destructive-foreground: #1c1c1f;
+    --sidebar: #19191c;
+    --sidebar-foreground: #d6d6dc;
+    --titlebar: #141417;
+    --titlebar-foreground: #ececef;
+
+    color-scheme: dark;
+  }
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-titlebar: var(--titlebar);
+  --color-titlebar-foreground: var(--titlebar-foreground);
+
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 4px);
+
+  --font-sans: var(--font-ui);
+  --font-mono: var(--font-code);
+}

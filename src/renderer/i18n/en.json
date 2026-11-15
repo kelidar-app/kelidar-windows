@@ -1,0 +1,45 @@
+{
+  "titleBar": {
+    "tabs": "Open tabs",
+    "homeTab": "Home",
+    "newTab": "New tab"
+  },
+  "nav": {
+    "label": "Main",
+    "hosts": "Hosts",
+    "files": "Files",
+    "tunnels": "Tunnels",
+    "snippets": "Snippets",
+    "settings": "Settings",
+    "comingSoon": "{{label}} is coming in a later version",
+    "withShortcut": "{{label}} ({{shortcut}})"
+  },
+  "hosts": {
+    "emptyTitle": "No hosts yet",
+    "emptyBody": "Save your servers here and connect with one click, or connect right away with Quick Connect.",
+    "quickConnectLabel": "Quick Connect",
+    "quickConnectPlaceholder": "user@server:22",
+    "quickConnectButton": "Connect",
+    "quickConnectNotReady": "Connecting is not available in this version yet. It arrives in the next update."
+  },
+  "settings": {
+    "title": "Settings",
+    "appearance": "Appearance",
+    "theme": "Theme",
+    "themeSystem": "Follow Windows",
+    "themeLight": "Light",
+    "themeDark": "Dark",
+    "language": "Language",
+    "languageHint": "The layout switches to right-to-left for Persian."
+  },
+  "languages": {
+    "en": "English",
+    "fa": "فارسی"
+  },
+  "errors": {
+    "IPC_FORBIDDEN": "{{appName}} refused a request from this window. Restart {{appName}}. If it happens again, please report a bug.",
+    "IPC_INVALID_PAYLOAD": "{{appName}} received a request it could not read. Restart {{appName}} and try again.",
+    "INTERNAL": "Something went wrong inside {{appName}}. Try again. If it keeps happening, restart the app.",
+    "SETTINGS_WRITE_FAILED": "Your settings could not be saved. Check that the disk has free space and the settings folder is not read-only, then try again."
+  }
+}

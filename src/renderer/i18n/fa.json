@@ -1,0 +1,45 @@
+{
+  "titleBar": {
+    "tabs": "تب‌های باز",
+    "homeTab": "خانه",
+    "newTab": "تب جدید"
+  },
+  "nav": {
+    "label": "اصلی",
+    "hosts": "هاست‌ها",
+    "files": "فایل‌ها",
+    "tunnels": "تونل‌ها",
+    "snippets": "اسنیپت‌ها",
+    "settings": "تنظیمات",
+    "comingSoon": "{{label}} در نسخه‌های بعدی اضافه می‌شود",
+    "withShortcut": "{{label}} ({{shortcut}})"
+  },
+  "hosts": {
+    "emptyTitle": "هنوز هاستی ندارید",
+    "emptyBody": "سرورهایتان را این‌جا ذخیره کنید و با یک کلیک وصل شوید، یا همین حالا با اتصال سریع وصل شوید.",
+    "quickConnectLabel": "اتصال سریع",
+    "quickConnectPlaceholder": "user@server:22",
+    "quickConnectButton": "اتصال",
+    "quickConnectNotReady": "اتصال در این نسخه هنوز فعال نیست و در به‌روزرسانی بعدی اضافه می‌شود."
+  },
+  "settings": {
+    "title": "تنظیمات",
+    "appearance": "ظاهر",
+    "theme": "تم",
+    "themeSystem": "هماهنگ با ویندوز",
+    "themeLight": "روشن",
+    "themeDark": "تیره",
+    "language": "زبان",
+    "languageHint": "با انتخاب فارسی، چیدمان راست‌به‌چپ می‌شود."
+  },
+  "languages": {
+    "en": "English",
+    "fa": "فارسی"
+  },
+  "errors": {
+    "IPC_FORBIDDEN": "{{appName}} درخواستی از این پنجره را رد کرد. {{appName}} را دوباره باز کنید. اگر باز هم تکرار شد، لطفاً گزارش باگ بفرستید.",
+    "IPC_INVALID_PAYLOAD": "{{appName}} درخواستی دریافت کرد که نتوانست بخواند. {{appName}} را دوباره باز کنید و دوباره امتحان کنید.",
+    "INTERNAL": "در {{appName}} خطایی رخ داد. دوباره امتحان کنید. اگر تکرار شد، برنامه را دوباره باز کنید.",
+    "SETTINGS_WRITE_FAILED": "تنظیمات ذخیره نشد. بررسی کنید دیسک فضای خالی دارد و پوشه‌ی تنظیمات فقط‌خواندنی نیست، بعد دوباره امتحان کنید."
+  }
+}

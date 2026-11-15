@@ -1,0 +1,67 @@
+@import 'tailwindcss';
+@import './tokens.css';
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    overflow: hidden;
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-ui);
+    -webkit-font-smoothing: antialiased;
+    user-select: none;
+  }
+
+  :lang(fa) body {
+    font-family: var(--font-ui-fa);
+  }
+
+  input,
+  textarea {
+    user-select: text;
+  }
+
+  *,
+  ::before,
+  ::after {
+    border-color: var(--border);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+@layer components {
+  /* The title bar drags the window; anything clickable inside it opts out. */
+  .app-drag {
+    -webkit-app-region: drag;
+    app-region: drag;
+  }
+
+  .app-no-drag {
+    -webkit-app-region: no-drag;
+    app-region: no-drag;
+  }
+
+  /*
+   * rtl-exempt: the Window Controls Overlay reports the free title bar area in
+   * physical screen coordinates (the buttons stay on the right in both
+   * directions), so this box uses physical left and width on purpose.
+   * Content inside it still flows with the document direction.
+   */
+  .titlebar-area {
+    position: absolute;
+    top: 0;
+    left: env(titlebar-area-x, 0);
+    width: env(titlebar-area-width, 100%);
+    height: env(titlebar-area-height, var(--titlebar-height));
+  }
+}
