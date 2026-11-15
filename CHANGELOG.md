@@ -9,6 +9,8 @@ All notable changes to this project are documented here. The format follows
 ### Added
 
 - Encrypted vault (`vault.json` in the user data folder): AES-256-GCM with a random 256-bit key wrapped by Windows DPAPI through Electron safeStorage (async API), a fresh nonce on every save, the header bound to the body, atomic saves and the ten newest backups in `vault-backups`. A damaged or changed vault is never overwritten. `--vault-self-test` checks the vault against the real safeStorage inside Electron.
+- Saved hosts: a Hosts list and a four-field form (name, address, user name, sign-in method) with the port under "More options". Sign in with a saved password, a password asked each time, or a private key file (OpenSSH, PEM or PuTTY) with an optional passphrase. The key file is picked in a native dialog run by main and imported into the vault; the renderer only gets the file name. Hosts can be edited and deleted (deleted records keep a tombstone and their secrets are wiped). Ctrl+N opens the form; Ctrl+E and Delete act on the focused host.
+- Dependencies: `ssh2` (SSH client in main, used without its optional native bindings) and `@xterm/xterm` with the fit, webgl and unicode-graphemes addons (terminal, used from step 1.5).
 - Phase 0 foundation: Electron, electron-vite, React and strict TypeScript project with ESLint, Prettier, Vitest and Playwright.
 - Secure main window: context isolation, sandbox, no Node integration, the app served from `app://` with a strict Content Security Policy, navigation and new windows denied, all permission requests denied, single-instance lock.
 - Electron fuses applied to the packaged app (no RunAsNode, no NODE_OPTIONS, no inspector flags, asar integrity check, app loads only from asar).

@@ -1,10 +1,13 @@
 import path from 'node:path'
-import type { BrowserWindow } from 'electron'
-import { app, ipcMain, nativeTheme } from 'electron'
+import os from 'node:os'
+import { app, BrowserWindow, dialog, ipcMain, nativeTheme } from 'electron'
 import { APP_ORIGIN } from '@shared/app'
 import { pickDefaultLanguage, type Theme } from '@shared/settings'
 import { configureAppPaths } from './app-paths'
+import { HostService } from './hosts/host-service'
+import { KeyFileImports } from './hosts/key-files'
 import { registerIpcHandlers } from './ipc/handlers'
+import { registerHostHandlers } from './ipc/host-handlers'
 import { createIpcRouter } from './ipc/router'
 import { createOriginMatcher, createSenderCheck } from './ipc/sender'
 import { applyWindowsAppIdentity } from './platform/windows'
@@ -13,6 +16,8 @@ import { applyDevelopmentCsp, denyAllPermissions, denyNavigationAndPopups } from
 import { SettingsStore } from './settings/store'
 import { runVaultSelfTest, VAULT_SELF_TEST_FLAG } from './vault/self-test'
 import { createSafeStorageWrapper } from './vault/safe-storage-wrapper'
+import { VaultService } from './vault/service'
+import { Vault } from './vault/vault'
 import { createMainWindow } from './window'
 
 configureAppPaths()
@@ -80,6 +85,12 @@ async function start(): Promise<void> {
     },
   })
 
+  const vaults = new VaultService(() =>
+    Vault.open({ directory: app.getPath('userData'), wrapper: createSafeStorageWrapper() }),
+  )
+  const keyFiles = new KeyFileImports()
+  const hosts = new HostService(vaults, keyFiles)
+
   const applyTheme = (theme: Theme): void => {
     nativeTheme.themeSource = theme
   }
@@ -89,7 +100,7 @@ async function start(): Promise<void> {
   app.on('will-quit', (event) => {
     if (flushed) return
     event.preventDefault()
-    void settings.flush().finally(() => {
+    void Promise.allSettled([settings.flush(), vaults.flush()]).finally(() => {
       flushed = true
       app.quit()
     })
@@ -110,6 +121,22 @@ async function start(): Promise<void> {
   mainWindow = created.win
   mainWindow.on('closed', () => {
     mainWindow = null
+  })
+
+  registerHostHandlers(router, {
+    hosts,
+    keyFiles,
+    chooseKeyFile: async (event) => {
+      const owner = BrowserWindow.fromWebContents(event.sender)
+      const options: Electron.OpenDialogOptions = {
+        properties: ['openFile', 'showHiddenFiles', 'dontAddToRecent'],
+        defaultPath: path.join(os.homedir(), '.ssh'),
+      }
+      const result = await (owner === null
+        ? dialog.showOpenDialog(options)
+        : dialog.showOpenDialog(owner, options))
+      return result.canceled ? null : (result.filePaths[0] ?? null)
+    },
   })
 
   registerIpcHandlers(router, {

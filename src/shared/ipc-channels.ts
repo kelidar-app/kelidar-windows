@@ -4,6 +4,10 @@
  */
 export const IPC_CHANNELS = [
   'app:getVersion',
+  'hosts:list',
+  'hosts:save',
+  'hosts:delete',
+  'hosts:pickKeyFile',
   'settings:get',
   'settings:update',
   'window:setTitleBarOverlay',

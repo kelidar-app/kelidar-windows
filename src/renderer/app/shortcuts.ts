@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { useHostFormStore } from '@renderer/stores/hosts'
 import { useUiStore } from '@renderer/stores/ui'
 
 /** Keyboard shortcuts for every action the shell has so far. */
@@ -6,6 +7,7 @@ export const SHORTCUTS = {
   hosts: { label: 'Ctrl+1', aria: 'Control+1' },
   settings: { label: 'Ctrl+,', aria: 'Control+,' },
   newTab: { label: 'Ctrl+T', aria: 'Control+T' },
+  newHost: { label: 'Ctrl+N', aria: 'Control+N' },
 } as const
 
 export function useGlobalShortcuts(): void {
@@ -22,6 +24,10 @@ export function useGlobalShortcuts(): void {
           break
         case 't':
           focusQuickConnect()
+          break
+        case 'n':
+          showSection('hosts')
+          useHostFormStore.getState().openNew()
           break
         default:
           return

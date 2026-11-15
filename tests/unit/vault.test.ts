@@ -5,7 +5,6 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { writeFileAtomic } from '../../src/main/fs/atomic-write'
 import { open, seal, generateVaultKey } from '../../src/main/vault/crypto'
-import type { KeyWrapper } from '../../src/main/vault/key-wrapper'
 import {
   listBackups,
   Vault,
@@ -13,26 +12,7 @@ import {
   VAULT_FILE_NAME,
   type VaultData,
 } from '../../src/main/vault/vault'
-
-/** Stands in for safeStorage: reversible, but not plaintext. */
-function fakeWrapper(overrides: Partial<KeyWrapper> = {}): KeyWrapper & { wraps: number } {
-  const wrapper = {
-    type: 'safeStorage' as const,
-    wraps: 0,
-    isAvailable: () => Promise.resolve(true),
-    wrap: (key: Buffer) => {
-      wrapper.wraps++
-      return Promise.resolve(Buffer.from(key.map((b) => b ^ 0x5a)).toString('base64'))
-    },
-    unwrap: (wrapped: string) =>
-      Promise.resolve({
-        key: Buffer.from(Buffer.from(wrapped, 'base64').map((b) => b ^ 0x5a)),
-        rewrap: false,
-      }),
-    ...overrides,
-  }
-  return wrapper
-}
+import { fakeWrapper } from './helpers/fake-wrapper'
 
 const now = new Date().toISOString()
 const SECRET_VALUE = 'correct horse battery staple'

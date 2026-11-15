@@ -1,6 +1,7 @@
 import { copyFile, mkdir, readdir, readFile, rm } from 'node:fs/promises'
 import path from 'node:path'
 import { z } from 'zod'
+import type { ErrorCode } from '@shared/errors'
 import {
   hostRecordSchema,
   knownHostRecordSchema,
@@ -63,12 +64,7 @@ function headerAad(header: Header): Buffer {
   )
 }
 
-export type VaultErrorCode =
-  | 'VAULT_UNAVAILABLE'
-  | 'VAULT_KEY_UNREADABLE'
-  | 'VAULT_CORRUPT'
-  | 'VAULT_NEWER_VERSION'
-  | 'VAULT_WRITE_FAILED'
+export type VaultErrorCode = Extract<ErrorCode, `VAULT_${string}`>
 
 /** Carries a code only. Never put vault contents in the message. */
 export class VaultError extends Error {

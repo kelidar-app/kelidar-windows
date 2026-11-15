@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import type { IpcError } from './errors'
+import { hostSaveRequestSchema, hostViewSchema, keyFileInfoSchema } from './hosts'
 import type { IpcChannel } from './ipc-channels'
+import { idSchema } from './records'
 import { uiSettingsPatchSchema, uiSettingsSchema } from './settings'
 
 /**
@@ -16,6 +18,23 @@ export const ipcContract = {
   'app:getVersion': {
     request: noPayload,
     response: z.object({ version: z.string() }),
+  },
+  'hosts:list': {
+    request: noPayload,
+    response: z.array(hostViewSchema),
+  },
+  'hosts:save': {
+    request: hostSaveRequestSchema,
+    response: hostViewSchema,
+  },
+  'hosts:delete': {
+    request: z.strictObject({ id: idSchema }),
+    response: z.undefined(),
+  },
+  /** Opens a file dialog in main. null when the user cancels. */
+  'hosts:pickKeyFile': {
+    request: noPayload,
+    response: keyFileInfoSchema.nullable(),
   },
   'settings:get': {
     request: noPayload,
