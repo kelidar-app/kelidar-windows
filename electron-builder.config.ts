@@ -13,7 +13,25 @@ const config: Configuration = {
     output: 'dist',
     buildResources: 'resources',
   },
-  files: ['out/**/*', 'package.json', '!**/*.map'],
+  files: [
+    'out/**/*',
+    'package.json',
+    '!**/*.map',
+    // ssh2 runs on Node's own crypto. Its optional native addons (built only
+    // when a compiler happens to be installed) are never shipped, so every
+    // build behaves the same and no build machine needs native tools.
+    '!**/node_modules/cpu-features/**',
+    '!**/node_modules/nan/**',
+    '!**/node_modules/buildcheck/**',
+    '!**/node_modules/ssh2/lib/protocol/crypto/build/**',
+    '!**/node_modules/ssh2/lib/protocol/crypto/src/**',
+    '!**/node_modules/ssh2/lib/protocol/crypto/binding.gyp',
+    '!**/node_modules/ssh2/install.js',
+    // Pageant helper for agent sign-in, which arrives in Phase 2.
+    '!**/node_modules/ssh2/util/pagent.exe',
+  ],
+  // Nothing to compile for Electron: see the native addons note above.
+  npmRebuild: false,
   asar: true,
   // Chromium UI locales to ship; the app's own languages are bundled in the renderer.
   electronLanguages: ['en-US', 'fa'],

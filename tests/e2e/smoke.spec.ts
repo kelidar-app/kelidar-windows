@@ -1,44 +1,10 @@
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import {
-  _electron as electron,
-  expect,
-  test,
-  type ElectronApplication,
-  type Page,
-} from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 import { APP, APP_ORIGIN } from '../../src/shared/app'
 import type { RendererApi } from '../../src/shared/ipc'
-
-/** Same name as USER_DATA_OVERRIDE_ENV in src/main/app-paths.ts (that module needs Electron). */
-const USER_DATA_ENV = `${APP.name.toUpperCase()}_USER_DATA_DIR`
-
-interface Launched {
-  app: ElectronApplication
-  page: Page
-  consoleErrors: string[]
-}
-
-/** Every app started by this file, so a failed assertion still closes it. */
-const launched: ElectronApplication[] = []
-
-async function launch(userData: string): Promise<Launched> {
-  const env: Record<string, string> = {}
-  for (const [key, value] of Object.entries(process.env)) {
-    if (value !== undefined) env[key] = value
-  }
-  env[USER_DATA_ENV] = userData
-  const app = await electron.launch({ args: ['.'], env })
-  launched.push(app)
-  const page = await app.firstWindow()
-  const consoleErrors: string[] = []
-  page.on('console', (message) => {
-    if (message.type() === 'error') consoleErrors.push(message.text())
-  })
-  await page.getByRole('navigation').waitFor()
-  return { app, page, consoleErrors }
-}
+import { closeAll, launch } from './launch'
 
 function api(page: Page) {
   return {
@@ -148,7 +114,7 @@ test('Phase 0 smoke: secure shell, typed IPC, and Persian mirrors the layout', a
     expect(consoleErrors).toEqual([])
     await app.close()
   } finally {
-    await Promise.all(launched.map((app) => app.close().catch(() => undefined)))
+    await closeAll()
     await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
   }
 })

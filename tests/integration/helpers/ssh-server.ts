@@ -32,6 +32,10 @@ export interface TestServer {
   ptys: PseudoTtyInfo[]
   resizes: { cols: number; rows: number }[]
   connections: Connection[]
+  /** Everything typed into any shell, in order. */
+  received: string[]
+  /** Open shells right now. */
+  openShells: () => number
   close: () => Promise<void>
 }
 
@@ -57,12 +61,15 @@ export async function startTestServer(options: TestServerOptions = {}): Promise<
           return parsed
         })()
 
+  let shells = 0
   const state: Omit<TestServer, 'port' | 'close'> = {
     hostKey,
     authAttempts: [],
     ptys: [],
     resizes: [],
     connections: [],
+    received: [],
+    openShells: () => shells,
   }
 
   const onAuth = (ctx: AuthContext): void => {
@@ -108,9 +115,14 @@ export async function startTestServer(options: TestServerOptions = {}): Promise<
 
   const runShell = (stream: ServerChannel): void => {
     stream.write('welcome\r\n')
+    shells++
+    stream.on('close', () => {
+      shells--
+    })
     let line = ''
     stream.on('data', (chunk: Buffer) => {
       const text = chunk.toString('utf8')
+      state.received.push(text)
       stream.write(text)
       line += text
       if (!line.includes('\r')) return
