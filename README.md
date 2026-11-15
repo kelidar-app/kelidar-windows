@@ -52,8 +52,8 @@ Get-FileHash .\Kelidar-Setup-0.1.0-x64.exe -Algorithm SHA256
 
 ## Build from source
 
-You need Windows 10 or 11 (x64), [Node.js](https://nodejs.org/) 22.18 or newer and Git. No C++
-build tools are needed.
+You need Windows 10 or 11 (x64), [Node.js](https://nodejs.org/) 24 LTS (see `.node-version`) and
+Git. No C++ build tools are needed.
 
 ```powershell
 git clone https://github.com/kelidar-app/kelidar-windows.git

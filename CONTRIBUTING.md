@@ -12,7 +12,8 @@ releases are made.
 
 ## Set up
 
-You need Windows 10 or 11 (x64), Node.js 22.18 or newer and Git.
+You need Windows 10 or 11 (x64), Git and Node.js 24 LTS, the version in `.node-version` that CI
+uses. With another Node.js version, its npm may write a lockfile that CI's npm rejects.
 
 ```powershell
 npm ci
