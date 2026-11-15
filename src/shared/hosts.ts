@@ -54,6 +54,7 @@ export const usernameSchema = z
  * Password: a value saves it; '' asks every time; undefined keeps the saved
  * one (and on a new host means: ask every time).
  * Key: `keyFileToken` comes from hosts:pickKeyFile; undefined keeps the key.
+ * fromSession: the password or key that worked in a Quick Connect session.
  */
 export const hostSaveRequestSchema = z.strictObject({
   id: idSchema.optional(),
@@ -74,6 +75,8 @@ export const hostSaveRequestSchema = z.strictObject({
         .optional(),
       passphrase: z.string().max(MAX_SECRET_LENGTH).optional(),
     }),
+    /** The sign-in that worked in a Quick Connect session (main keeps it). */
+    z.strictObject({ type: z.literal('fromSession'), sessionId: idSchema }),
   ]),
 })
 export type HostSaveRequest = z.input<typeof hostSaveRequestSchema>

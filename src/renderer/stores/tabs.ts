@@ -39,6 +39,10 @@ interface TabsState {
   /** Error from the last failed open (before any tab existed). */
   openError: ErrorCode | null
   openHost: (hostId: string) => Promise<boolean>
+  /** Quick Connect: what the user typed (already checked with parseQuickConnect). */
+  openQuick: (input: string) => Promise<boolean>
+  /** After "Save host": the tab now belongs to the saved host. */
+  adoptHost: (sessionId: string, host: { id: string; name: string }) => void
   reconnect: (tabId: string) => Promise<void>
   activate: (tabId: string) => void
   activateNext: (step: 1 | -1) => void
@@ -67,8 +71,12 @@ export const useTabsStore = create<TabsState>()((set, get) => {
   const openSession = async (
     source: TabSource,
   ): Promise<{ ok: true; data: SessionOpenResponse } | { ok: false; code: ErrorCode }> => {
-    if (source.kind !== 'host') return { ok: false, code: 'INTERNAL' }
-    const result = await api.invoke('session:open', { hostId: source.hostId, ...INITIAL_SIZE })
+    const result = await api.invoke(
+      'session:open',
+      source.kind === 'host'
+        ? { hostId: source.hostId, ...INITIAL_SIZE }
+        : { quick: source.input, ...INITIAL_SIZE },
+    )
     return result.ok ? result : { ok: false, code: result.error.code }
   }
 
@@ -78,30 +86,43 @@ export const useTabsStore = create<TabsState>()((set, get) => {
     return queued.reduce(applyEvent, tab)
   }
 
+  const openTab = async (source: TabSource): Promise<boolean> => {
+    const result = await openSession(source)
+    if (!result.ok) {
+      set({ openError: result.code })
+      return false
+    }
+    const tab = withEarlyStates({
+      id: crypto.randomUUID(),
+      sessionId: result.data.sessionId,
+      source,
+      title: result.data.title,
+      target: result.data.target,
+      state: 'connecting',
+      generation: 0,
+    })
+    set((state) => ({ tabs: [...state.tabs, tab], activeId: tab.id, openError: null }))
+    return true
+  }
+
   return {
     tabs: [],
     activeId: HOME_TAB,
     openError: null,
     renamingId: null,
 
-    openHost: async (hostId) => {
-      const source: TabSource = { kind: 'host', hostId }
-      const result = await openSession(source)
-      if (!result.ok) {
-        set({ openError: result.code })
-        return false
-      }
-      const tab = withEarlyStates({
-        id: crypto.randomUUID(),
-        sessionId: result.data.sessionId,
-        source,
-        title: result.data.title,
-        target: result.data.target,
-        state: 'connecting',
-        generation: 0,
-      })
-      set((state) => ({ tabs: [...state.tabs, tab], activeId: tab.id, openError: null }))
-      return true
+    openHost: (hostId) => openTab({ kind: 'host', hostId }),
+
+    openQuick: (input) => openTab({ kind: 'quick', input }),
+
+    adoptHost: (sessionId, host) => {
+      set((state) => ({
+        tabs: state.tabs.map((tab) =>
+          tab.sessionId === sessionId
+            ? { ...tab, source: { kind: 'host', hostId: host.id }, title: host.name }
+            : tab,
+        ),
+      }))
     },
 
     reconnect: async (tabId) => {

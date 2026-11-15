@@ -10,7 +10,14 @@ import type {
 export type Credential =
   | { type: 'password'; password: string }
   | { type: 'ask' }
-  | { type: 'key'; privateKey: string; passphrase?: string; keyName: string }
+  | {
+      type: 'key'
+      privateKey: string
+      passphrase?: string
+      keyName: string
+      /** Encrypted and no passphrase known yet: ask before connecting. */
+      needsPassphrase?: boolean
+    }
 
 /** The sign-in that worked, kept for "Save host" after Quick Connect. */
 export type UsedCredential =
@@ -110,7 +117,12 @@ export function createAuthHandler(
       }
       if (credential.type === 'key' && !keyTried && allowed('publickey')) {
         keyTried = true
-        callbacks.onTry(credential)
+        callbacks.onTry({
+          type: 'key',
+          privateKey: credential.privateKey,
+          keyName: credential.keyName,
+          ...(credential.passphrase === undefined ? {} : { passphrase: credential.passphrase }),
+        })
         next({
           type: 'publickey',
           username,

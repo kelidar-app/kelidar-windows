@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { ErrorCode } from './errors'
+import { MAX_QUICK_CONNECT_LENGTH } from './quick-connect'
 import { idSchema, portSchema } from './records'
 
 /** Connection states, in the order a healthy session goes through them. */
@@ -20,6 +21,11 @@ export const terminalSizeSchema = z.object({
 
 export const sessionOpenRequestSchema = z.union([
   z.strictObject({ hostId: idSchema, ...terminalSizeSchema.shape }),
+  /** Quick Connect: what the user typed; main parses it again. */
+  z.strictObject({
+    quick: z.string().min(1).max(MAX_QUICK_CONNECT_LENGTH),
+    ...terminalSizeSchema.shape,
+  }),
 ])
 export type SessionOpenRequest = z.input<typeof sessionOpenRequestSchema>
 
@@ -94,6 +100,14 @@ export type PromptRequest =
   | {
       promptId: string
       sessionId: string
+      kind: 'passphrase'
+      /** File name of the key, never its path or content. */
+      keyName: string
+      attempt: number
+    }
+  | {
+      promptId: string
+      sessionId: string
       kind: 'keyboardInteractive'
       host: string
       name: string
@@ -106,6 +120,7 @@ export const promptAnswerSchema = z.strictObject({
   answer: z.discriminatedUnion('kind', [
     z.strictObject({ kind: z.literal('hostKey'), trust: z.boolean() }),
     z.strictObject({ kind: z.literal('password'), value: z.string().max(4096).nullable() }),
+    z.strictObject({ kind: z.literal('passphrase'), value: z.string().max(4096).nullable() }),
     z.strictObject({
       kind: z.literal('keyboardInteractive'),
       values: z.array(z.string().max(4096)).max(20).nullable(),

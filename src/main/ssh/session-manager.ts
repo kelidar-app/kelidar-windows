@@ -3,10 +3,16 @@ import { Client, type ClientChannel, type ConnectConfig } from 'ssh2'
 import type { ErrorCode } from '@shared/errors'
 import type { HostKeyInfo, SessionOpenResponse, SessionState, SessionTarget } from '@shared/session'
 import { AppError } from '../ipc/app-error'
-import { createAuthHandler, type Credential, type UsedCredential } from './auth'
+import {
+  createAuthHandler,
+  MAX_PASSWORD_ATTEMPTS,
+  type Credential,
+  type UsedCredential,
+} from './auth'
 import { mapConnectionError } from './errors'
 import type { EventSink } from './event-sink'
 import { describeHostKey, type KnownHosts } from './host-keys'
+import { inspectPrivateKey } from './keys'
 import type { PromptBroker } from './prompts'
 
 /** Everything needed to connect. Built in main from the vault or a Quick Connect string. */
@@ -44,6 +50,8 @@ export const MAX_SESSIONS_PER_WINDOW = 64
 
 export interface SessionManagerOptions {
   resolveHost: (hostId: string) => Promise<ConnectTarget>
+  /** Builds a target from Quick Connect text. */
+  resolveQuick?: (input: string) => Promise<ConnectTarget>
   knownHosts: Pick<KnownHosts, 'check' | 'trust'>
   prompts: PromptBroker
   /** Receives state changes and error codes only, never data or secrets. */
@@ -54,6 +62,7 @@ export interface SessionManagerOptions {
 
 export type SessionOpenRequest =
   | { hostId: string; cols: number; rows: number }
+  | { quick: string; cols: number; rows: number }
   | { target: ConnectTarget; cols: number; rows: number }
 
 const FINAL_STATES: ReadonlySet<SessionState> = new Set(['closed', 'error'])
@@ -77,6 +86,8 @@ class Session {
   /** The credential that was being tried; becomes `used` once the shell opens. */
   trying: UsedCredential | null = null
   used: UsedCredential | undefined
+  /** Starts as the target's credential; gains the passphrase once unlocked. */
+  credential: Credential
 
   constructor(
     readonly id: string,
@@ -84,7 +95,9 @@ class Session {
     readonly target: ConnectTarget,
     public cols: number,
     public rows: number,
-  ) {}
+  ) {
+    this.credential = target.credential
+  }
 }
 
 /**
@@ -103,8 +116,7 @@ export class SessionManager {
     const owned = [...this.sessions.values()].filter((s) => s.owner.id === owner.id).length
     if (owned >= MAX_SESSIONS_PER_WINDOW) throw new AppError('SESSION_LIMIT')
 
-    const target =
-      'hostId' in request ? await this.options.resolveHost(request.hostId) : request.target
+    const target = await this.resolve(request)
     const session = new Session(randomUUID(), owner, target, request.cols, request.rows)
     this.sessions.set(session.id, session)
     // Answer the renderer first, then start; events for this id may follow right away.
@@ -117,6 +129,15 @@ export class SessionManager {
       target: { address: target.address, port: target.port, username: target.username },
       ...(target.hostId === undefined ? {} : { hostId: target.hostId }),
     }
+  }
+
+  private resolve(request: SessionOpenRequest): Promise<ConnectTarget> {
+    if ('hostId' in request) return this.options.resolveHost(request.hostId)
+    if ('quick' in request) {
+      if (this.options.resolveQuick === undefined) throw new AppError('QUICK_CONNECT_INVALID')
+      return this.options.resolveQuick(request.quick)
+    }
+    return Promise.resolve(request.target)
   }
 
   input(owner: EventSink, sessionId: string, data: string): void {
@@ -232,11 +253,58 @@ export class SessionManager {
 
   private connect(session: Session): void {
     if (FINAL_STATES.has(session.state)) return
-    const { target, owner } = session
     this.options.log?.(`session ${session.id.slice(0, 8)} connecting`)
-    if (!owner.isDestroyed()) {
-      owner.send('session:state', { sessionId: session.id, state: 'connecting' })
+    if (!session.owner.isDestroyed()) {
+      session.owner.send('session:state', { sessionId: session.id, state: 'connecting' })
     }
+    void (async () => {
+      const credential = session.credential
+      if (credential.type === 'key' && credential.needsPassphrase === true) {
+        const unlocked = await this.unlockKey(session, credential)
+        if (unlocked === null) return
+        session.credential = unlocked
+      }
+      this.connectClient(session)
+    })()
+  }
+
+  /** Asks for a key's passphrase (three tries) and checks it locally. */
+  private async unlockKey(
+    session: Session,
+    credential: Extract<Credential, { type: 'key' }>,
+  ): Promise<Credential | null> {
+    for (let attempt = 0; attempt < MAX_PASSWORD_ATTEMPTS; attempt++) {
+      const answer = await this.options.prompts.ask(session.owner, {
+        sessionId: session.id,
+        kind: 'passphrase',
+        keyName: credential.keyName,
+        attempt,
+      })
+      if (FINAL_STATES.has(session.state)) return null
+      if (answer?.kind !== 'passphrase' || answer.value === null) {
+        session.cancelled = true
+        this.finish(session, 'closed')
+        return null
+      }
+      try {
+        inspectPrivateKey(credential.privateKey, answer.value)
+        return {
+          type: 'key',
+          privateKey: credential.privateKey,
+          keyName: credential.keyName,
+          passphrase: answer.value,
+        }
+      } catch {
+        // Wrong passphrase: ask again.
+      }
+    }
+    this.finish(session, 'error', 'KEY_PASSPHRASE_WRONG')
+    return null
+  }
+
+  private connectClient(session: Session): void {
+    if (FINAL_STATES.has(session.state)) return
+    const { target, owner } = session
 
     const client = this.options.createClient?.() ?? new Client()
     session.client = client
@@ -269,7 +337,7 @@ export class SessionManager {
       hostVerifier: (key: Buffer, verify: (valid: boolean) => void) => {
         this.verifyHostKey(session, key, verify)
       },
-      authHandler: createAuthHandler(target.username, target.credential, {
+      authHandler: createAuthHandler(target.username, session.credential, {
         askPassword: async (attempt) => {
           const answer = await this.options.prompts.ask(owner, {
             sessionId: session.id,

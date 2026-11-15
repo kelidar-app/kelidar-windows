@@ -12,6 +12,7 @@ import { Field } from '@renderer/components/ui/field'
 import { Input } from '@renderer/components/ui/input'
 import { api } from '@renderer/lib/api'
 import { useHostFormStore, useHostsStore, type HostFormState } from '@renderer/stores/hosts'
+import { useTabsStore } from '@renderer/stores/tabs'
 
 type Method = 'password' | 'key'
 
@@ -54,6 +55,7 @@ function HostForm({
 }) {
   const { t } = useTranslation()
   const save = useHostsStore((state) => state.save)
+  const adoptHost = useTabsStore((state) => state.adoptHost)
   const editing = form.mode === 'edit' ? form.host : undefined
   const prefill = form.mode === 'new' ? form.prefill : undefined
   const moreId = useId()
@@ -61,6 +63,8 @@ function HostForm({
   const [name, setName] = useState(editing?.name ?? '')
   const [address, setAddress] = useState(editing?.address ?? prefill?.address ?? '')
   const [username, setUsername] = useState(editing?.username ?? prefill?.username ?? '')
+  const sessionId = prefill?.sessionId
+  const [useSessionSignIn, setUseSessionSignIn] = useState(sessionId !== undefined)
   const [method, setMethod] = useState<Method>(
     editing?.signIn.method === 'key' ? 'key' : 'password',
   )
@@ -105,6 +109,7 @@ function HostForm({
   }
 
   const buildAuth = (): HostSaveRequest['auth'] | null => {
+    if (useSessionSignIn && sessionId !== undefined) return { type: 'fromSession', sessionId }
     if (method === 'password') {
       if (password !== '') return { type: 'password', password }
       return savedPassword ? { type: 'password' } : { type: 'password', password: '' }
@@ -156,8 +161,10 @@ function HostForm({
       auth,
     })
     setSaving(false)
-    if (result.ok) onDone()
-    else showError(result.code)
+    if (result.ok) {
+      if (sessionId !== undefined) adoptHost(sessionId, result.data)
+      onDone()
+    } else showError(result.code)
   }
 
   return (
@@ -234,104 +241,123 @@ function HostForm({
         )}
       </Field>
 
-      <ChoiceGroup
-        legend={t('hostForm.signIn')}
-        value={method}
-        choices={[
-          { value: 'password', label: t('hostForm.methodPassword') },
-          { value: 'key', label: t('hostForm.methodKey') },
-        ]}
-        onChange={(value) => {
-          setMethod(value)
-          setErrors({})
-        }}
-      />
+      {sessionId !== undefined && (
+        <label className="flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={useSessionSignIn}
+            className="mt-0.5 size-4 accent-primary"
+            onChange={(event) => {
+              setUseSessionSignIn(event.target.checked)
+              setErrors({})
+            }}
+          />
+          <span>{t('hostForm.useSessionSignIn')}</span>
+        </label>
+      )}
 
-      {method === 'password' ? (
-        <Field
-          label={t('hostForm.password')}
-          hint={
-            savedPassword ? (
-              <span className="flex flex-wrap items-center gap-x-2">
-                {t('hostForm.passwordKeepHint')}
-                <button
-                  type="button"
-                  className="text-primary underline underline-offset-2"
-                  onClick={() => {
-                    setForgetPassword(true)
-                    setPassword('')
-                  }}
-                >
-                  {t('hostForm.passwordForget')}
-                </button>
-              </span>
-            ) : (
-              t('hostForm.passwordAskHint')
-            )
-          }
-        >
-          {({ id, describedBy }) => (
-            <Input
-              id={id}
-              type="password"
-              dir="ltr"
-              value={password}
-              autoComplete="new-password"
-              placeholder={savedPassword ? '••••••••' : ''}
-              aria-describedby={describedBy}
-              onChange={(event) => {
-                setPassword(event.target.value)
-              }}
-            />
-          )}
-        </Field>
-      ) : (
+      {!useSessionSignIn && (
         <>
-          <div className="flex flex-col gap-1.5">
-            <span className="text-sm font-medium">{t('hostForm.keyFile')}</span>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  void pickKey()
-                }}
-              >
-                <FileKey aria-hidden />
-                {keyFile !== null || savedKey !== undefined
-                  ? t('hostForm.keyChange')
-                  : t('hostForm.keyChoose')}
-              </Button>
-              <span dir="ltr" className="min-w-0 truncate font-mono text-sm" role="status">
-                {keyFile?.fileName ?? savedKey?.keyName ?? ''}
-              </span>
-            </div>
-            {errors.key !== undefined && (
-              <p role="alert" className="text-xs text-destructive">
-                {errors.key}
-              </p>
-            )}
-          </div>
-          {needsPassphrase && (
+          <ChoiceGroup
+            legend={t('hostForm.signIn')}
+            value={method}
+            choices={[
+              { value: 'password', label: t('hostForm.methodPassword') },
+              { value: 'key', label: t('hostForm.methodKey') },
+            ]}
+            onChange={(value) => {
+              setMethod(value)
+              setErrors({})
+            }}
+          />
+
+          {method === 'password' ? (
             <Field
-              label={t('hostForm.passphrase')}
-              hint={keyFile === null ? t('hostForm.passphraseKeepHint') : undefined}
-              error={errors.passphrase ?? null}
+              label={t('hostForm.password')}
+              hint={
+                savedPassword ? (
+                  <span className="flex flex-wrap items-center gap-x-2">
+                    {t('hostForm.passwordKeepHint')}
+                    <button
+                      type="button"
+                      className="text-primary underline underline-offset-2"
+                      onClick={() => {
+                        setForgetPassword(true)
+                        setPassword('')
+                      }}
+                    >
+                      {t('hostForm.passwordForget')}
+                    </button>
+                  </span>
+                ) : (
+                  t('hostForm.passwordAskHint')
+                )
+              }
             >
-              {({ id, describedBy, invalid }) => (
+              {({ id, describedBy }) => (
                 <Input
                   id={id}
                   type="password"
                   dir="ltr"
-                  value={passphrase}
-                  autoComplete="off"
-                  aria-invalid={invalid}
+                  value={password}
+                  autoComplete="new-password"
+                  placeholder={savedPassword ? '••••••••' : ''}
                   aria-describedby={describedBy}
                   onChange={(event) => {
-                    setPassphrase(event.target.value)
+                    setPassword(event.target.value)
                   }}
                 />
               )}
             </Field>
+          ) : (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-sm font-medium">{t('hostForm.keyFile')}</span>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      void pickKey()
+                    }}
+                  >
+                    <FileKey aria-hidden />
+                    {keyFile !== null || savedKey !== undefined
+                      ? t('hostForm.keyChange')
+                      : t('hostForm.keyChoose')}
+                  </Button>
+                  <span dir="ltr" className="min-w-0 truncate font-mono text-sm" role="status">
+                    {keyFile?.fileName ?? savedKey?.keyName ?? ''}
+                  </span>
+                </div>
+                {errors.key !== undefined && (
+                  <p role="alert" className="text-xs text-destructive">
+                    {errors.key}
+                  </p>
+                )}
+              </div>
+              {needsPassphrase && (
+                <Field
+                  label={t('hostForm.passphrase')}
+                  hint={keyFile === null ? t('hostForm.passphraseKeepHint') : undefined}
+                  error={errors.passphrase ?? null}
+                >
+                  {({ id, describedBy, invalid }) => (
+                    <Input
+                      id={id}
+                      type="password"
+                      dir="ltr"
+                      value={passphrase}
+                      autoComplete="off"
+                      aria-invalid={invalid}
+                      aria-describedby={describedBy}
+                      onChange={(event) => {
+                        setPassphrase(event.target.value)
+                      }}
+                    />
+                  )}
+                </Field>
+              )}
+            </>
           )}
         </>
       )}

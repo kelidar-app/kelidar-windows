@@ -22,7 +22,6 @@
     "quickConnectLabel": "Quick Connect",
     "quickConnectPlaceholder": "user@server:22",
     "quickConnectButton": "Connect",
-    "quickConnectNotReady": "Connecting is not available in this version yet. It arrives in the next update.",
     "title": "Hosts",
     "newHost": "New host",
     "listLabel": "Saved hosts",
@@ -81,7 +80,8 @@
     "SSH_AUTH_FAILED": "The server did not accept the user name, password or key. Check them in the host settings, then connect again.",
     "SSH_ALGORITHM_MISMATCH": "{{appName}} and the server have no encryption method in common. The server may be very old or use unusual settings. Update the server's SSH software or ask its administrator.",
     "SSH_SHELL_FAILED": "You are signed in, but the server did not open a terminal. The account may have no shell. Check the account on the server or ask its administrator.",
-    "SSH_FAILED": "The connection failed for an unexpected reason. Connect again. If it keeps failing, check that the server accepts SSH connections."
+    "SSH_FAILED": "The connection failed for an unexpected reason. Connect again. If it keeps failing, check that the server accepts SSH connections.",
+    "QUICK_CONNECT_INVALID": "{{appName}} could not read that address. Type it as user@host or user@host:port, then try again."
   },
   "common": {
     "save": "Save",
@@ -114,7 +114,8 @@
     "passphraseKeepHint": "Leave empty to keep the saved passphrase.",
     "moreOptions": "More options",
     "port": "Port",
-    "portInvalid": "Use a whole number from 1 to {{max}}."
+    "portInvalid": "Use a whole number from 1 to {{max}}.",
+    "useSessionSignIn": "Save the password or key that worked for this connection"
   },
   "prompts": {
     "hostKeyTitle": "Trust this server?",
@@ -128,7 +129,9 @@
     "connect": "Connect",
     "keyboardTitle": "{{host}} asks",
     "answer": "Answer",
-    "send": "Send"
+    "send": "Send",
+    "passphraseTitle": "Passphrase for {{keyName}}",
+    "passphraseRetry": "That passphrase did not unlock the key. Try again."
   },
   "terminal": {
     "label": "Terminal: {{title}}",
@@ -152,6 +155,23 @@
       "ready": "connected",
       "closed": "disconnected",
       "error": "connection problem"
+    }
+  },
+  "quickConnect": {
+    "hint": "For example root@server.example.com:2222, or paste a whole ssh command with -p and -i.",
+    "notSaved": "This connection is not saved.",
+    "saveHost": "Save host",
+    "errors": {
+      "empty": "Type a server to connect to, like root@server.example.com.",
+      "missing-host": "Add the server's address after the @, like root@server.example.com.",
+      "missing-user": "Add the user name before the address, like root@server.example.com.",
+      "invalid-host": "The server address is not valid. Use a host name or IP address, like server.example.com or 203.0.113.7.",
+      "invalid-user": "The user name can't contain spaces, @ or :. Check it and try again.",
+      "invalid-port": "The port must be a whole number from 1 to 65535, like :2222.",
+      "missing-value": "{{option}} needs a value after it, like -p 2222.",
+      "unsupported-option": "{{option}} is not supported in Quick Connect yet. Remove it and try again.",
+      "remote-command": "Quick Connect opens a terminal only. Remove the command after the address, or put quotes around a path with spaces.",
+      "unclosed-quote": "A quote is not closed. Add the missing \" or ' and try again."
     }
   }
 }

@@ -9,6 +9,7 @@ import { createSenderCheck, type FrameLike } from '../../../src/main/ipc/sender'
 import type { EventSink } from '../../../src/main/ssh/event-sink'
 import { KnownHosts } from '../../../src/main/ssh/host-keys'
 import { PromptBroker } from '../../../src/main/ssh/prompts'
+import { quickConnectTarget } from '../../../src/main/ssh/quick-target'
 import { SessionManager, type SessionTiming } from '../../../src/main/ssh/session-manager'
 import { registerSessionHandlers } from '../../../src/main/ipc/session-handlers'
 import { VaultService } from '../../../src/main/vault/service'
@@ -86,7 +87,12 @@ export async function waitFor<T>(
  * and fake windows. Only Electron itself is missing.
  */
 export async function createHarness(
-  options: { timing?: Partial<SessionTiming>; keyFile?: () => string | null } = {},
+  options: {
+    timing?: Partial<SessionTiming>
+    keyFile?: () => string | null
+    /** Home folder for Quick Connect's -i paths; the temp folder by default. */
+    homeDir?: string
+  } = {},
 ) {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'kelidar-it-'))
   const logs: string[] = []
@@ -98,6 +104,7 @@ export async function createHarness(
   const knownHosts = new KnownHosts(vaults)
   const sessions = new SessionManager({
     resolveHost: (id) => hosts.connectTarget(id),
+    resolveQuick: (input) => quickConnectTarget(input, options.homeDir ?? dir),
     knownHosts,
     prompts,
     log: (message) => logs.push(message),
@@ -122,6 +129,7 @@ export async function createHarness(
     hosts,
     keyFiles,
     chooseKeyFile: () => Promise.resolve(options.keyFile?.() ?? null),
+    sessionCredential: (event, sessionId) => sessions.usedCredential(event.sink, sessionId),
   })
   registerSessionHandlers(router, {
     sessions,

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { HostView, ParsedHostSaveRequest } from '@shared/hosts'
 import { DEFAULT_SSH_PORT, type AuthRef, type HostRecord, type Id } from '@shared/records'
 import { AppError } from '../ipc/app-error'
-import type { Credential } from '../ssh/auth'
+import type { Credential, UsedCredential } from '../ssh/auth'
 import { describePublicKey, inspectPrivateKey } from '../ssh/keys'
 import type { ConnectTarget } from '../ssh/session-manager'
 import type { VaultService } from '../vault/service'
@@ -102,7 +102,11 @@ export class HostService {
       .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
   }
 
-  async save(request: ParsedHostSaveRequest): Promise<HostView> {
+  /**
+   * `fromSession` is the sign-in that worked in the Quick Connect session the
+   * request names (looked up by the IPC handler); undefined means none.
+   */
+  async save(request: ParsedHostSaveRequest, fromSession?: UsedCredential): Promise<HostView> {
     const vault = await this.vaults.get()
     const before = vault.read()
     const existing =
@@ -111,13 +115,31 @@ export class HostService {
         : before.hosts.find((host) => host.id === request.id && live(host))
     if (request.id !== undefined && existing === undefined) throw new AppError('HOST_NOT_FOUND')
 
+    // "Use the sign-in from this connection" becomes a password or a key file.
+    let auth: Exclude<ParsedHostSaveRequest['auth'], { type: 'fromSession' }>
+    let sessionKey: PendingKeyFile | undefined
+    if (request.auth.type !== 'fromSession') auth = request.auth
+    else if (fromSession === undefined) auth = { type: 'password', password: '' }
+    else if (fromSession.type === 'password') {
+      auth = { type: 'password', password: fromSession.password }
+    } else {
+      auth = {
+        type: 'key',
+        ...(fromSession.passphrase === undefined ? {} : { passphrase: fromSession.passphrase }),
+      }
+      sessionKey = {
+        fileName: fromSession.keyName,
+        content: fromSession.privateKey,
+        encrypted: fromSession.passphrase !== undefined,
+      }
+    }
+
     // Validate key material first, so a wrong passphrase saves nothing.
-    const auth = request.auth
     let newKey: { file: PendingKeyFile; checked: ReturnType<typeof checkNewKey> } | undefined
     let keptKeyPassphrase: string | undefined
     if (auth.type === 'key') {
-      if (auth.keyFileToken !== undefined) {
-        const file = this.keyFiles.peek(auth.keyFileToken)
+      if (auth.keyFileToken !== undefined || sessionKey !== undefined) {
+        const file = sessionKey ?? this.keyFiles.peek(auth.keyFileToken ?? '')
         newKey = { file, checked: checkNewKey(file, auth.passphrase) }
       } else {
         const keyAuth = existing?.auth

@@ -1,5 +1,6 @@
 import type { HostService } from '../hosts/host-service'
 import type { KeyFileImports } from '../hosts/key-files'
+import type { UsedCredential } from '../ssh/auth'
 import type { InvokeEventLike, IpcRouter } from './router'
 
 export interface HostHandlerDeps<E extends InvokeEventLike> {
@@ -7,6 +8,8 @@ export interface HostHandlerDeps<E extends InvokeEventLike> {
   keyFiles: KeyFileImports
   /** Shows the native open dialog for the window that sent `event`. */
   chooseKeyFile: (event: E) => Promise<string | null>
+  /** The sign-in that worked in one of the sender's sessions (Quick Connect "Save host"). */
+  sessionCredential: (event: E, sessionId: string) => UsedCredential | undefined
 }
 
 /** No Electron imports here, so tests can drive these handlers through a fake ipcMain. */
@@ -15,7 +18,13 @@ export function registerHostHandlers<E extends InvokeEventLike>(
   deps: HostHandlerDeps<E>,
 ): void {
   router.handle('hosts:list', () => deps.hosts.list())
-  router.handle('hosts:save', (request) => deps.hosts.save(request))
+  router.handle('hosts:save', (request, event) => {
+    const used =
+      request.auth.type === 'fromSession'
+        ? deps.sessionCredential(event, request.auth.sessionId)
+        : undefined
+    return deps.hosts.save(request, used)
+  })
   router.handle('hosts:delete', async ({ id }) => {
     await deps.hosts.delete(id)
     return undefined

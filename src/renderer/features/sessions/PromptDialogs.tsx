@@ -15,7 +15,9 @@ export function PromptDialogs() {
   if (current === undefined) return null
   // A new key per prompt resets typed values between questions.
   if (current.kind === 'hostKey') return <HostKeyDialog key={current.promptId} prompt={current} />
-  if (current.kind === 'password') return <PasswordDialog key={current.promptId} prompt={current} />
+  if (current.kind === 'password' || current.kind === 'passphrase') {
+    return <SecretDialog key={current.promptId} prompt={current} />
+  }
   return <KeyboardDialog key={current.promptId} prompt={current} />
 }
 
@@ -67,22 +69,33 @@ function HostKeyDialog({ prompt }: { prompt: Extract<PromptRequest, { kind: 'hos
   )
 }
 
-function PasswordDialog({ prompt }: { prompt: Extract<PromptRequest, { kind: 'password' }> }) {
+/** A password for the server, or the passphrase of a key file. */
+function SecretDialog({
+  prompt,
+}: {
+  prompt: Extract<PromptRequest, { kind: 'password' | 'passphrase' }>
+}) {
   const { t } = useTranslation()
   const answer = usePromptsStore((state) => state.answer)
   const [value, setValue] = useState('')
   const formId = `prompt-${prompt.promptId}`
+  const kind = prompt.kind
   const cancel = (): void => {
-    answer(prompt.promptId, { kind: 'password', value: null })
+    answer(prompt.promptId, { kind, value: null })
   }
+  const title =
+    prompt.kind === 'password'
+      ? t('prompts.passwordTitle', {
+          target: formatTarget({ username: prompt.username, address: prompt.host, port: 22 }),
+        })
+      : t('prompts.passphraseTitle', { keyName: prompt.keyName })
+  const retry = kind === 'password' ? t('prompts.passwordRetry') : t('prompts.passphraseRetry')
   return (
     <Dialog
       open
       onClose={cancel}
-      title={t('prompts.passwordTitle', {
-        target: formatTarget({ username: prompt.username, address: prompt.host, port: 22 }),
-      })}
-      description={prompt.attempt > 0 ? t('prompts.passwordRetry') : undefined}
+      title={title}
+      description={prompt.attempt > 0 ? retry : undefined}
       footer={
         <>
           <Button variant="outline" onClick={cancel}>
@@ -98,10 +111,10 @@ function PasswordDialog({ prompt }: { prompt: Extract<PromptRequest, { kind: 'pa
         id={formId}
         onSubmit={(event) => {
           event.preventDefault()
-          answer(prompt.promptId, { kind: 'password', value })
+          answer(prompt.promptId, { kind, value })
         }}
       >
-        <Field label={t('hostForm.password')}>
+        <Field label={kind === 'password' ? t('hostForm.password') : t('hostForm.passphrase')}>
           {({ id }) => (
             <Input
               id={id}

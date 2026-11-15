@@ -18,6 +18,7 @@ import { applyDevelopmentCsp, denyAllPermissions, denyNavigationAndPopups } from
 import { SettingsStore } from './settings/store'
 import { KnownHosts } from './ssh/host-keys'
 import { PromptBroker } from './ssh/prompts'
+import { quickConnectTarget } from './ssh/quick-target'
 import { SessionManager } from './ssh/session-manager'
 import { runVaultSelfTest, VAULT_SELF_TEST_FLAG } from './vault/self-test'
 import { createSafeStorageWrapper } from './vault/safe-storage-wrapper'
@@ -102,6 +103,7 @@ async function start(): Promise<void> {
   const knownHosts = new KnownHosts(vaults)
   const sessions = new SessionManager({
     resolveHost: (id) => hosts.connectTarget(id),
+    resolveQuick: (input) => quickConnectTarget(input, os.homedir()),
     knownHosts,
     prompts,
     log: (message) => {
@@ -150,6 +152,8 @@ async function start(): Promise<void> {
   registerHostHandlers(router, {
     hosts,
     keyFiles,
+    sessionCredential: (event, sessionId) =>
+      sessions.usedCredential(sinkOf(event.sender), sessionId),
     chooseKeyFile: async (event) => {
       const owner = BrowserWindow.fromWebContents(event.sender)
       const options: Electron.OpenDialogOptions = {

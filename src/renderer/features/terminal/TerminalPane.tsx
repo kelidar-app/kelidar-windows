@@ -1,4 +1,4 @@
-import { CircleAlert, LoaderCircle, PlugZap, RotateCw, ShieldAlert, X } from 'lucide-react'
+import { CircleAlert, LoaderCircle, PlugZap, RotateCw, Save, ShieldAlert, X } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatTarget } from '@shared/address'
@@ -6,6 +6,7 @@ import { Button } from '@renderer/components/ui/button'
 import { Dialog } from '@renderer/components/ui/dialog'
 import { api } from '@renderer/lib/api'
 import { cn } from '@renderer/lib/cn'
+import { useHostFormStore } from '@renderer/stores/hosts'
 import { useTabsStore, type TerminalTab } from '@renderer/stores/tabs'
 import { TerminalView } from './TerminalView'
 
@@ -18,8 +19,30 @@ export function TerminalPane({ tab, active }: { tab: TerminalTab; active: boolea
       className={cn('min-h-0 flex-1 flex-col', active ? 'flex' : 'hidden')}
     >
       <SessionBanner tab={tab} />
+      {tab.source.kind === 'quick' && tab.state === 'ready' && <SaveHostBar tab={tab} />}
       <TerminalView tab={tab} active={active} />
     </section>
+  )
+}
+
+/** Quick Connect saved nothing; offer to save the host once connected. */
+function SaveHostBar({ tab }: { tab: TerminalTab }) {
+  const { t } = useTranslation()
+  const openNew = useHostFormStore((state) => state.openNew)
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-border bg-muted px-4 py-1.5 text-sm">
+      <span className="text-muted-foreground">{t('quickConnect.notSaved')}</span>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => {
+          openNew({ ...tab.target, sessionId: tab.sessionId })
+        }}
+      >
+        <Save aria-hidden />
+        {t('quickConnect.saveHost')}
+      </Button>
+    </div>
   )
 }
 

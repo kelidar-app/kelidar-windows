@@ -39,14 +39,20 @@ export const useHostsStore = create<HostsState>()((set, get) => ({
 }))
 
 /** Which host form is open, if any. Prefill comes from Quick Connect's "Save host". */
+export interface HostPrefill {
+  address: string
+  port: number
+  username: string
+  /** The Quick Connect session whose sign-in can be saved. */
+  sessionId?: string
+}
+
 export type HostFormState =
-  | { mode: 'closed' }
-  | { mode: 'new'; prefill?: { address: string; port: number; username: string } }
-  | { mode: 'edit'; host: HostView }
+  { mode: 'closed' } | { mode: 'new'; prefill?: HostPrefill } | { mode: 'edit'; host: HostView }
 
 interface HostFormStore {
   form: HostFormState
-  openNew: (prefill?: { address: string; port: number; username: string }) => void
+  openNew: (prefill?: HostPrefill) => void
   openEdit: (host: HostView) => void
   close: () => void
 }
