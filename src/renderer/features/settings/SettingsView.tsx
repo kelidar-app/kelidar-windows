@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { ChoiceGroup, type Choice } from '@renderer/components/ui/choice-group'
 import { useSettingsStore } from '@renderer/stores/settings'
+import { TerminalSettings } from './TerminalSettings'
 import { TerminalThemePicker } from './TerminalThemePicker'
 import type { Language, Theme } from '@shared/settings'
 
@@ -54,6 +55,7 @@ export function SettingsView() {
           onChange={(language) => void update({ language })}
         />
       </div>
+      <TerminalSettings />
     </section>
   )
 }

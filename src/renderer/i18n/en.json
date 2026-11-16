@@ -4,7 +4,9 @@
     "homeTab": "Home",
     "newTab": "New tab",
     "closeTab": "Close {{title}}",
-    "renameTab": "Tab name"
+    "renameTab": "Tab name",
+    "paneCount_one": "{{count}} pane",
+    "paneCount_other": "{{count}} panes"
   },
   "nav": {
     "label": "Main",
@@ -77,7 +79,17 @@
       "classic": "Classic",
       "soft": "Soft",
       "contrast": "High contrast"
-    }
+    },
+    "terminal": "Terminal",
+    "fontFamily": "Font",
+    "fontInvalid": "Use font names separated by commas, like 'Cascadia Mono', Consolas.",
+    "fontSize": "Font size",
+    "fontSizeInvalid": "Use a whole number from {{min}} to {{max}}.",
+    "lineHeight": "Line spacing",
+    "lineHeightInvalid": "Use a number from 1 to 2, like 1.2.",
+    "zoomHint": "Zoom every terminal with {{zoomIn}} and {{zoomOut}}, or Ctrl and the mouse wheel. {{reset}} goes back to this size.",
+    "pasteGuard": "Ask before pasting several lines",
+    "pasteGuardHint": "Shows what you paste before it runs. Production servers always ask."
   },
   "languages": {
     "en": "English",
@@ -136,7 +148,10 @@
     "JUMP_FORWARD_FAILED": "The jump host did not let the connection through. Check that the next server's address and port are right, and that AllowTcpForwarding is on in the jump host's sshd_config.",
     "PROXY_UNREACHABLE": "The proxy could not be reached. Check its address and port and that it is running, then connect again.",
     "PROXY_AUTH_FAILED": "The proxy did not accept the user name or password. Check them in the host settings, then connect again.",
-    "PROXY_REFUSED": "The proxy refused to connect to the server. The proxy may block this address or port. Check the proxy's rules, then connect again."
+    "PROXY_REFUSED": "The proxy refused to connect to the server. The proxy may block this address or port. Check the proxy's rules, then connect again.",
+    "SUDO_NO_PROMPT": "sudo is not asking for a password right now, so nothing was typed. Run the sudo command again and press the shortcut when it asks.",
+    "SUDO_NO_PASSWORD": "This host signs in with a key or the agent, so Kelidar has no password to type. Type the password yourself.",
+    "LINK_REFUSED": "Only web links (http and https) open from the terminal. This link was not opened."
   },
   "common": {
     "save": "Save",
@@ -268,7 +283,17 @@
     "reconnectNow": "Reconnect now",
     "tmuxMissing": "This host uses a sticky session, but tmux is not installed on the server, so a normal shell opened. Work in it is lost if the connection drops.",
     "tmuxInstall": "To install tmux, run one of these on the server (Debian or Ubuntu, Fedora or RHEL, Alpine), then connect again:",
-    "onJumpHost": "On the jump host {{name}}: {{message}}"
+    "onJumpHost": "On the jump host {{name}}: {{message}}",
+    "productionPane": "Production server",
+    "sudoAsks": "sudo is asking for your password.",
+    "sudoFill": "Type the saved password ({{shortcut}})",
+    "linkHint": "Ctrl+click to open the link in your browser",
+    "search": "Search",
+    "searchPrevious": "Previous match (Shift+Enter)",
+    "searchNext": "Next match (Enter)",
+    "searchNone": "No matches",
+    "searchCount": "{{index}} of {{count}}",
+    "splitDivider": "Resize panes"
   },
   "quickConnect": {
     "hint": "For example root@server.example.com:2222, or paste a whole ssh command with -p and -i.",
@@ -376,7 +401,23 @@
     "newIdentity": "New identity",
     "generateKey": "Generate a key",
     "importKey": "Import a key file",
-    "duplicateTab": "New tab on the same connection"
+    "duplicateTab": "New tab on the same connection",
+    "splitRight": "Split pane to the right",
+    "splitDown": "Split pane down",
+    "closePane": "Close pane",
+    "focusLeft": "Go to the pane on the left",
+    "focusRight": "Go to the pane on the right",
+    "focusUp": "Go to the pane above",
+    "focusDown": "Go to the pane below",
+    "resizeLeft": "Move the divider left",
+    "resizeRight": "Move the divider right",
+    "resizeUp": "Move the divider up",
+    "resizeDown": "Move the divider down",
+    "searchTerminal": "Search in the terminal",
+    "zoomIn": "Zoom in",
+    "zoomOut": "Zoom out",
+    "zoomReset": "Reset zoom",
+    "fillSudo": "Type the saved password for sudo"
   },
   "shortcuts": {
     "title": "Keyboard shortcuts",
@@ -388,7 +429,8 @@
       "tabs": "Tabs and terminal",
       "hostList": "On a selected host",
       "palette": "In the command palette",
-      "keychain": "Keychain"
+      "keychain": "Keychain",
+      "terminal": "Terminal and panes"
     },
     "favorite": "Add to or remove from favorites",
     "moveFocus": "Move between hosts",
@@ -484,5 +526,16 @@
     "running": "Adding the key and testing it…",
     "doneTitle": "Done: this host now signs in with a key",
     "doneBody": "{{name}} signs in with the key {{key}}. Its saved password was removed from this computer."
+  },
+  "paste": {
+    "title_one": "Paste {{count}} line?",
+    "title_other": "Paste {{count}} lines?",
+    "body": "Each line runs as a command as soon as it reaches the shell. Check what you are about to paste.",
+    "confirm_one": "Paste {{count}} line",
+    "confirm_other": "Paste {{count}} lines",
+    "production": "This is a production server. Commands you paste here run on it right away.",
+    "productionConfirm": "I checked these lines and want to run them on production.",
+    "more_one": "and {{count}} more line",
+    "more_other": "and {{count}} more lines"
   }
 }

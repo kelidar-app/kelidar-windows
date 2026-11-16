@@ -22,6 +22,8 @@
     "src/renderer/lib/fuzzy.ts",
     "src/renderer/app/key-combos.ts",
     "src/renderer/features/hosts/connection-draft.ts",
-    "src/renderer/features/hosts/drag-rules.ts"
+    "src/renderer/features/hosts/drag-rules.ts",
+    "src/renderer/features/terminal/layout.ts",
+    "src/renderer/stores/terminal-ui.ts"
   ]
 }

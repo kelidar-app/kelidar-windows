@@ -66,7 +66,10 @@ describe('right-to-left layout', () => {
   it('uses no physical left/right utility classes in components', async () => {
     const problems: string[] = []
     for (const file of await filesUnder(rendererDir, ['.tsx', '.ts'])) {
-      const lines = (await readFile(file, 'utf8')).split('\n')
+      const text = await readFile(file, 'utf8')
+      // A file may opt out, with a reason, when left and right are physical on purpose.
+      if (/^\/\/ rtl-exempt-file: \S/m.test(text.split('\n').slice(0, 3).join('\n'))) continue
+      const lines = text.split('\n')
       lines.forEach((line, index) => {
         if (PHYSICAL_CLASS.test(line))
           problems.push(`${path.relative(rendererDir, file)}:${String(index + 1)}: ${line.trim()}`)

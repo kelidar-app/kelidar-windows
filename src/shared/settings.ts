@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { agentSourceSchema } from './keychain'
 
 /** Bump this and add a migration in src/main/settings/migrations.ts when the shape changes. */
-export const SETTINGS_VERSION = 4
+export const SETTINGS_VERSION = 5
 
 export const LANGUAGES = ['en', 'fa'] as const
 export const languageSchema = z.enum(LANGUAGES)
@@ -21,6 +21,19 @@ export type TerminalThemeId = z.infer<typeof terminalThemeSchema>
 export const HOSTS_VIEWS = ['cards', 'list'] as const
 export const hostsViewSchema = z.enum(HOSTS_VIEWS)
 export type HostsView = z.infer<typeof hostsViewSchema>
+
+export const DEFAULT_TERMINAL_FONT = "'Cascadia Mono', Consolas, 'Courier New', monospace"
+/** A CSS font-family list: names, quotes, commas and spaces only. */
+export const terminalFontFamilySchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(200)
+  .regex(/^[\p{L}\p{N} ,'".-]+$/u)
+export const MIN_FONT_SIZE = 8
+export const MAX_FONT_SIZE = 36
+export const terminalFontSizeSchema = z.int().min(MIN_FONT_SIZE).max(MAX_FONT_SIZE)
+export const terminalLineHeightSchema = z.number().min(1).max(2)
 
 const pixels = z.int().min(-100_000).max(100_000)
 
@@ -41,6 +54,11 @@ export const settingsFileSchema = z.object({
   terminalTheme: terminalThemeSchema,
   hostsView: hostsViewSchema,
   agent: agentSourceSchema,
+  terminalFontFamily: terminalFontFamilySchema,
+  terminalFontSize: terminalFontSizeSchema,
+  terminalLineHeight: terminalLineHeightSchema,
+  /** Ask before pasting text with line breaks (production hosts always ask). */
+  pasteGuard: z.boolean(),
   window: windowStateSchema.optional(),
 })
 export type SettingsFile = z.infer<typeof settingsFileSchema>
@@ -52,6 +70,10 @@ export const uiSettingsSchema = z.object({
   terminalTheme: terminalThemeSchema,
   hostsView: hostsViewSchema,
   agent: agentSourceSchema,
+  terminalFontFamily: terminalFontFamilySchema,
+  terminalFontSize: terminalFontSizeSchema,
+  terminalLineHeight: terminalLineHeightSchema,
+  pasteGuard: z.boolean(),
 })
 export type UiSettings = z.infer<typeof uiSettingsSchema>
 
@@ -62,6 +84,10 @@ export const uiSettingsPatchSchema = z
     terminalTheme: terminalThemeSchema.optional(),
     hostsView: hostsViewSchema.optional(),
     agent: agentSourceSchema.optional(),
+    terminalFontFamily: terminalFontFamilySchema.optional(),
+    terminalFontSize: terminalFontSizeSchema.optional(),
+    terminalLineHeight: terminalLineHeightSchema.optional(),
+    pasteGuard: z.boolean().optional(),
   })
   .refine((patch) => Object.keys(patch).length > 0, { message: 'Empty patch' })
 export type UiSettingsPatch = z.infer<typeof uiSettingsPatchSchema>
@@ -72,6 +98,10 @@ export const DEFAULT_UI_SETTINGS: UiSettings = {
   terminalTheme: 'kelidar',
   hostsView: 'cards',
   agent: 'auto',
+  terminalFontFamily: DEFAULT_TERMINAL_FONT,
+  terminalFontSize: 14,
+  terminalLineHeight: 1.1,
+  pasteGuard: true,
 }
 
 /** Persian when the system prefers it, otherwise English. */

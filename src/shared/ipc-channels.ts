@@ -5,6 +5,7 @@
 export const IPC_CHANNELS = [
   'agent:status',
   'app:getVersion',
+  'app:openExternal',
   'clipboard:readText',
   'clipboard:writeText',
   'groups:list',
@@ -36,6 +37,7 @@ export const IPC_CHANNELS = [
   'session:close',
   'session:duplicate',
   'session:reconnectNow',
+  'session:fillSudo',
   'settings:get',
   'settings:update',
   'window:setTitleBarOverlay',

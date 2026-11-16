@@ -23,6 +23,7 @@ import { describeHostKey, type KnownHosts } from './host-keys'
 import { inspectPrivateKey } from './keys'
 import type { PromptBroker } from './prompts'
 import { openProxySocket, type ProxyConfig } from './proxy'
+import { looksLikeSudoPrompt, SUDO_TAIL_BYTES } from './sudo'
 
 /** One server on the way: a jump host or the target itself. */
 export interface HopTarget extends SessionTarget {
@@ -205,6 +206,9 @@ class Session {
   userClosed = false
   /** The server reported the shell's exit: a closed channel is the end, not a drop. */
   shellExited = false
+  /** The last output, to spot a sudo password prompt. */
+  tail = ''
+  sudoPrompt = false
   /** runCommand: no terminal, no events to the renderer (prompts still go to the window). */
   exec:
     | {
@@ -344,6 +348,42 @@ export class SessionManager {
       session.paused = false
       session.stream?.resume()
     }
+  }
+
+  /**
+   * The sudo hotkey: types the session's sign-in password, followed by Enter,
+   * but only while the output ends with a sudo password prompt (input not
+   * echoed), so the password cannot land on the screen.
+   */
+  fillSudo(owner: EventSink, sessionId: string): void {
+    const session = this.owned(owner, sessionId)
+    const stream = session.stream
+    if (session.state !== 'ready' || stream === undefined || !session.sudoPrompt) {
+      throw new AppError('SUDO_NO_PROMPT')
+    }
+    const password = this.signInPassword(session)
+    if (password === undefined) throw new AppError('SUDO_NO_PASSWORD')
+    stream.write(`${password}\r`)
+    session.tail = ''
+    this.setSudoPrompt(session, false)
+  }
+
+  /** The password the session signed in with (saved, or typed when asked). */
+  private signInPassword(session: Session): string | undefined {
+    const final = session.link.final
+    if (final.used?.type === 'password') return final.used.password
+    return final.credential.type === 'password' ? final.credential.password : undefined
+  }
+
+  private setSudoPrompt(session: Session, prompt: boolean): void {
+    if (session.sudoPrompt === prompt) return
+    session.sudoPrompt = prompt
+    if (session.owner.isDestroyed() || session.exec !== undefined) return
+    session.owner.send('session:sudo', {
+      sessionId: session.id,
+      prompt,
+      canFill: this.signInPassword(session) !== undefined,
+    })
   }
 
   /** While reconnecting: try now instead of waiting. */
@@ -1015,6 +1055,7 @@ export class SessionManager {
   // --- Output --------------------------------------------------------------
 
   private enqueue(session: Session, chunk: Buffer): void {
+    session.tail = (session.tail + chunk.toString('utf8')).slice(-SUDO_TAIL_BYTES)
     session.pending.push(chunk)
     session.pendingBytes += chunk.length
     if (session.pendingBytes >= this.timing.maxBatchBytes) {
@@ -1036,6 +1077,7 @@ export class SessionManager {
     session.pendingBytes = 0
     if (session.owner.isDestroyed()) return
     session.owner.send('session:data', { sessionId: session.id, data })
+    this.setSudoPrompt(session, looksLikeSudoPrompt(session.tail))
     session.unacked += data.length
     if (!session.paused && session.unacked >= this.timing.highWaterBytes) {
       session.paused = true

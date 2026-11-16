@@ -3,19 +3,22 @@ import { api } from './api'
 
 type DataHandler = (data: Uint8Array) => void
 type StateHandler = (event: SessionStateEvent) => void
+type SudoHandler = (event: { sessionId: string; prompt: boolean; canFill: boolean }) => void
 
 const dataHandlers = new Map<string, DataHandler>()
 /** Output that arrived before its terminal was mounted. */
 const earlyData = new Map<string, Uint8Array[]>()
 let stateHandler: StateHandler | null = null
+let sudoHandler: SudoHandler | null = null
 let started = false
 
 /**
  * One subscription for all sessions. Output is routed to the terminal that
  * owns the session; state changes go to the tabs store.
  */
-export function startSessionEvents(onState: StateHandler): void {
+export function startSessionEvents(onState: StateHandler, onSudo: SudoHandler): void {
   stateHandler = onState
+  sudoHandler = onSudo
   if (started) return
   started = true
   api.on('session:data', ({ sessionId, data }) => {
@@ -30,6 +33,9 @@ export function startSessionEvents(onState: StateHandler): void {
   })
   api.on('session:state', (event) => {
     stateHandler?.(event)
+  })
+  api.on('session:sudo', (event) => {
+    sudoHandler?.(event)
   })
 }
 

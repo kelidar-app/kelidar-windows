@@ -6,7 +6,8 @@ import { KeychainDialogs } from '@renderer/features/keychain/KeychainDialogs'
 import { KeychainView } from '@renderer/features/keychain/KeychainView'
 import { PromptDialogs } from '@renderer/features/sessions/PromptDialogs'
 import { SettingsView } from '@renderer/features/settings/SettingsView'
-import { TerminalPane } from '@renderer/features/terminal/TerminalPane'
+import { TabView } from '@renderer/features/terminal/TabView'
+import { PasteGuardDialog } from '@renderer/features/terminal/PasteGuardDialog'
 import { subscribeToPrompts } from '@renderer/stores/prompts'
 import { HOME_TAB, startTabs, useTabsStore } from '@renderer/stores/tabs'
 import { useUiStore } from '@renderer/stores/ui'
@@ -40,7 +41,7 @@ export function App() {
           {homeActive && section === 'settings' && <SettingsView />}
           {/* Terminals stay mounted while hidden, so their scrollback survives. */}
           {tabs.map((tab) => (
-            <TerminalPane key={tab.id} tab={tab} active={tab.id === activeId} />
+            <TabView key={tab.id} tab={tab} active={tab.id === activeId} />
           ))}
         </main>
       </div>
@@ -48,6 +49,7 @@ export function App() {
       <GroupFormDialog />
       <KeychainDialogs />
       <PromptDialogs />
+      <PasteGuardDialog />
       <CommandPalette />
       <ShortcutsDialog />
     </div>

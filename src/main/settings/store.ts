@@ -1,10 +1,12 @@
 import { readFile, rename } from 'node:fs/promises'
 import path from 'node:path'
 import {
+  DEFAULT_UI_SETTINGS,
   SETTINGS_VERSION,
   settingsFileSchema,
   type Language,
   type SettingsFile,
+  uiSettingsSchema,
   type UiSettings,
   type UiSettingsPatch,
   type WindowState,
@@ -24,14 +26,7 @@ export interface SettingsStoreOptions {
 }
 
 function defaults(language: Language): SettingsFile {
-  return {
-    version: SETTINGS_VERSION,
-    language,
-    theme: 'system',
-    terminalTheme: 'kelidar',
-    hostsView: 'cards',
-    agent: 'auto',
-  }
+  return { version: SETTINGS_VERSION, ...DEFAULT_UI_SETTINGS, language }
 }
 
 function isMissingFile(error: unknown): boolean {
@@ -112,13 +107,8 @@ export class SettingsStore {
   }
 
   getUi(): UiSettings {
-    return {
-      language: this.current.language,
-      theme: this.current.theme,
-      terminalTheme: this.current.terminalTheme,
-      hostsView: this.current.hostsView,
-      agent: this.current.agent,
-    }
+    // The UI schema leaves out the file's own fields (version, window state).
+    return uiSettingsSchema.parse(this.current)
   }
 
   async updateUi(patch: UiSettingsPatch): Promise<UiSettings> {

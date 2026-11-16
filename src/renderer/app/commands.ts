@@ -1,14 +1,17 @@
+import { FOCUS, paneIds } from '@renderer/features/terminal/layout'
 import { terminalActions } from '@renderer/features/terminal/terminal-registry'
+import { api } from '@renderer/lib/api'
 import { useGroupFormStore, useHostFormStore } from '@renderer/stores/hosts'
 import { useKeychainDialogStore } from '@renderer/stores/keychain'
 import { useSettingsStore } from '@renderer/stores/settings'
-import { HOME_TAB, useTabsStore } from '@renderer/stores/tabs'
+import { activePaneId, HOME_TAB, useTabsStore, type Pane } from '@renderer/stores/tabs'
+import { useTerminalUiStore } from '@renderer/stores/terminal-ui'
 import { useUiStore } from '@renderer/stores/ui'
 import { COMMAND_KEYS, findByKey, type CommandId, type KeyCombo } from './key-combos'
 
 export { comboAria, comboLabel, type CommandId } from './key-combos'
 
-export type CommandSection = 'general' | 'hosts' | 'keychain' | 'tabs'
+export type CommandSection = 'general' | 'hosts' | 'keychain' | 'tabs' | 'terminal'
 
 /**
  * Every app action in one list. The keyboard handler, the command palette
@@ -27,6 +30,23 @@ export interface AppCommand {
 const onTerminalTab = (): boolean => useTabsStore.getState().activeId !== HOME_TAB
 const always = (): boolean => true
 
+function activePane(): Pane | undefined {
+  const id = activePaneId()
+  return id === undefined ? undefined : useTabsStore.getState().panes[id]
+}
+
+/** Pane focus and resize keys (Alt+Arrow) only act while the tab is split. */
+function isSplit(): boolean {
+  const { tabs, activeId } = useTabsStore.getState()
+  const tab = tabs.find((item) => item.id === activeId)
+  return tab !== undefined && paneIds(tab.layout).length > 1
+}
+
+function hasLiveSession(): boolean {
+  const pane = activePane()
+  return pane !== undefined && pane.state !== 'closed' && pane.state !== 'error'
+}
+
 function command(
   id: CommandId,
   section: CommandSection,
@@ -35,6 +55,8 @@ function command(
 ): AppCommand {
   return { id, section, combos: COMMAND_KEYS[id], available, run }
 }
+
+const tabs = () => useTabsStore.getState()
 
 export const COMMANDS: readonly AppCommand[] = [
   command('palette', 'general', () => {
@@ -52,9 +74,6 @@ export const COMMANDS: readonly AppCommand[] = [
   command('settings', 'general', () => {
     useUiStore.getState().showSection('settings')
   }),
-  command('newTab', 'tabs', () => {
-    useUiStore.getState().focusQuickConnect()
-  }),
   command('newHost', 'hosts', () => {
     useUiStore.getState().showSection('hosts')
     useHostFormStore.getState().openNew()
@@ -71,19 +90,6 @@ export const COMMANDS: readonly AppCommand[] = [
     useUiStore.getState().showSection('hosts')
     void settings.update({ hostsView: settings.settings.hostsView === 'cards' ? 'list' : 'cards' })
   }),
-  command(
-    'duplicateTab',
-    'tabs',
-    () => {
-      const tabs = useTabsStore.getState()
-      void tabs.duplicate(tabs.activeId)
-    },
-    () => {
-      const tabs = useTabsStore.getState()
-      const active = tabs.tabs.find((tab) => tab.id === tabs.activeId)
-      return active !== undefined && active.state !== 'closed' && active.state !== 'error'
-    },
-  ),
   command('newIdentity', 'keychain', () => {
     useUiStore.getState().showSection('keychain')
     useKeychainDialogStore.getState().open({ kind: 'identity' })
@@ -96,36 +102,163 @@ export const COMMANDS: readonly AppCommand[] = [
     useUiStore.getState().showSection('keychain')
     useKeychainDialogStore.getState().open({ kind: 'importKey' })
   }),
+  command('newTab', 'tabs', () => {
+    useUiStore.getState().focusQuickConnect()
+  }),
+  command(
+    'duplicateTab',
+    'tabs',
+    () => {
+      void tabs().duplicate(tabs().activeId)
+    },
+    hasLiveSession,
+  ),
   command(
     'closeTab',
     'tabs',
     () => {
-      const tabs = useTabsStore.getState()
-      tabs.close(tabs.activeId)
+      tabs().close(tabs().activeId)
     },
     onTerminalTab,
   ),
   command('nextTab', 'tabs', () => {
-    useTabsStore.getState().activateNext(1)
+    tabs().activateNext(1)
   }),
   command('previousTab', 'tabs', () => {
-    useTabsStore.getState().activateNext(-1)
+    tabs().activateNext(-1)
   }),
   command(
     'renameTab',
     'tabs',
     () => {
-      useTabsStore.getState().startRename()
+      tabs().startRename()
     },
     onTerminalTab,
   ),
   command(
-    'paste',
-    'tabs',
+    'splitRight',
+    'terminal',
     () => {
-      terminalActions(useTabsStore.getState().activeId)?.paste()
+      void tabs().split('beside')
     },
     onTerminalTab,
+  ),
+  command(
+    'splitDown',
+    'terminal',
+    () => {
+      void tabs().split('below')
+    },
+    onTerminalTab,
+  ),
+  command(
+    'closePane',
+    'terminal',
+    () => {
+      const id = activePaneId()
+      if (id !== undefined) tabs().closePane(id)
+    },
+    onTerminalTab,
+  ),
+  command(
+    'focusLeft',
+    'terminal',
+    () => {
+      tabs().moveFocus(FOCUS.left)
+    },
+    isSplit,
+  ),
+  command(
+    'focusRight',
+    'terminal',
+    () => {
+      tabs().moveFocus(FOCUS.right)
+    },
+    isSplit,
+  ),
+  command(
+    'focusUp',
+    'terminal',
+    () => {
+      tabs().moveFocus(FOCUS.up)
+    },
+    isSplit,
+  ),
+  command(
+    'focusDown',
+    'terminal',
+    () => {
+      tabs().moveFocus(FOCUS.down)
+    },
+    isSplit,
+  ),
+  command(
+    'resizeLeft',
+    'terminal',
+    () => {
+      tabs().resizeFocused(FOCUS.left)
+    },
+    isSplit,
+  ),
+  command(
+    'resizeRight',
+    'terminal',
+    () => {
+      tabs().resizeFocused(FOCUS.right)
+    },
+    isSplit,
+  ),
+  command(
+    'resizeUp',
+    'terminal',
+    () => {
+      tabs().resizeFocused(FOCUS.up)
+    },
+    isSplit,
+  ),
+  command(
+    'resizeDown',
+    'terminal',
+    () => {
+      tabs().resizeFocused(FOCUS.down)
+    },
+    isSplit,
+  ),
+  command(
+    'paste',
+    'terminal',
+    () => {
+      const id = activePaneId()
+      if (id !== undefined) terminalActions(id)?.paste()
+    },
+    onTerminalTab,
+  ),
+  command(
+    'searchTerminal',
+    'terminal',
+    () => {
+      const id = activePaneId()
+      if (id !== undefined) terminalActions(id)?.openSearch()
+    },
+    onTerminalTab,
+  ),
+  command('zoomIn', 'terminal', () => {
+    useTerminalUiStore.getState().zoomBy(1)
+  }),
+  command('zoomOut', 'terminal', () => {
+    useTerminalUiStore.getState().zoomBy(-1)
+  }),
+  command('zoomReset', 'terminal', () => {
+    useTerminalUiStore.getState().resetZoom()
+  }),
+  command(
+    'fillSudo',
+    'terminal',
+    () => {
+      const pane = activePane()
+      if (pane !== undefined) void api.invoke('session:fillSudo', { sessionId: pane.sessionId })
+    },
+    () => activePane()?.sudo?.canFill === true,
   ),
 ]
 

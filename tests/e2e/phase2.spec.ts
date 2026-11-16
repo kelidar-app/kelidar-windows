@@ -14,6 +14,8 @@ const PASSWORD = 'e2e-Pass-Osprey-6620'
  * generation, copying the public key, identities) and Upgrade to key login.
  * Step 2.3 (Reach): a jump host chosen in the form, the sticky session
  * command shown before it runs, and a new tab on the same connection.
+ * Step 2.4 (Terminal comfort): split panes and pane focus, search, zoom, the
+ * production colors and paste guard, and the sudo password hotkey.
  * Later steps add to this file.
  */
 test('Phase 2 smoke: organize hosts, search, palette and shortcuts', async () => {
@@ -260,6 +262,72 @@ test('Phase 2 smoke: organize hosts, search, palette and shortcuts', async () =>
     await page.mouse.up()
     await expect(lab.locator('[data-host-item]', { hasText: 'Other' })).toHaveCount(0)
     await expect(page.locator('[data-top-level-drop]')).toHaveCount(0)
+
+    // Tag "Behind" as production: its tabs and panes turn red.
+    await page.getByRole('button', { name: 'Edit Behind' }).first().click()
+    dialog = page.getByRole('dialog', { name: 'Edit host' })
+    await dialog.getByLabel('Environment').selectOption('production')
+    await dialog.getByRole('button', { name: 'Save' }).click()
+    await expect(dialog).toBeHidden()
+    await page
+      .getByRole('tab', { name: /^Behind/ })
+      .first()
+      .click()
+    await expect(page.locator('[data-tab-state][data-environment="production"]')).toHaveCount(2)
+    const view = page.locator('[data-tab-view]:not([hidden])')
+    await expect(view.locator('[data-pane-id][data-environment="production"]')).toHaveCount(1)
+
+    // Split right: a second pane on the same connection, then move focus with Alt+Arrow.
+    await page.keyboard.press('Control+Shift+D')
+    await expect(view.locator('[data-pane-state="ready"]')).toHaveCount(2)
+    await expect.poll(() => behindServer?.openShells()).toBe(3)
+    expect(behindServer.connections).toHaveLength(1)
+    const panes = view.locator('[data-pane-id]')
+    await expect(panes.nth(1)).toHaveAttribute('data-focused', '')
+    await page.keyboard.press('Alt+ArrowLeft')
+    await expect(panes.nth(0)).toHaveAttribute('data-focused', '')
+
+    // Search the scrollback of the focused pane.
+    await page.keyboard.press('Control+Shift+F')
+    const termSearch = view.getByRole('search')
+    await termSearch.getByRole('textbox', { name: 'Search' }).fill('welcome')
+    await expect(termSearch.getByRole('status')).toHaveText(/1 of \d+/)
+    await page.keyboard.press('Escape')
+    await expect(termSearch).toBeHidden()
+
+    // Zoom: bigger letters, fewer columns, and the server hears the new size.
+    const columnsBefore = behindServer.resizes.at(-1)?.cols ?? 0
+    await page.keyboard.press('Control+Equal')
+    await page.keyboard.press('Control+Equal')
+    await expect.poll(() => behindServer?.resizes.at(-1)?.cols ?? 0).toBeLessThan(columnsBefore)
+    await page.keyboard.press('Control+Digit0')
+
+    // Pasting two lines on production: preview, and a box to tick first.
+    await app.evaluate(({ clipboard }) => clipboard.writeText('echo one\necho two\n'))
+    await page.keyboard.press('Control+Shift+V')
+    const guard = page.getByRole('alertdialog', { name: 'Paste 2 lines?' })
+    await expect(guard.locator('[data-paste-preview]')).toHaveText('echo one\necho two')
+    const pasteButton = guard.getByRole('button', { name: 'Paste 2 lines' })
+    await expect(pasteButton).toBeDisabled()
+    await guard.getByRole('checkbox').check()
+    await pasteButton.click()
+    await expect.poll(() => behindServer?.received.join('')).toContain('echo two')
+
+    // sudo asks: the bar offers the hotkey, which types the saved password.
+    await page.keyboard.type('sudo whoami')
+    await page.keyboard.press('Enter')
+    await expect(view.locator('[data-sudo-bar]')).toBeVisible()
+    expect(behindServer.sudoAnswers).toEqual([])
+    await page.keyboard.press('Control+Shift+S')
+    await expect
+      .poll(() => behindServer?.sudoAnswers)
+      .toEqual([{ password: PASSWORD, right: true }])
+    await expect(view.locator('[data-sudo-bar]')).toHaveCount(0)
+
+    // Close the pane: the other one stays.
+    await page.keyboard.press('Control+Shift+W')
+    await expect(view.locator('[data-pane-id]')).toHaveCount(1)
+    await page.keyboard.press('Control+1')
 
     // Palette preferences: switch to Persian, and the layout mirrors.
     await page.keyboard.press('Control+k')

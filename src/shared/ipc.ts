@@ -53,6 +53,11 @@ export const ipcContract = {
     request: noPayload,
     response: z.object({ version: z.string() }),
   },
+  /** A link Ctrl+clicked in a terminal. Main opens http and https links only. */
+  'app:openExternal': {
+    request: z.strictObject({ url: z.string().max(2048) }),
+    response: z.undefined(),
+  },
   /** Terminal paste: the user's clipboard text, read in main on request. */
   'clipboard:readText': {
     request: noPayload,
@@ -187,6 +192,14 @@ export const ipcContract = {
     request: sessionDuplicateSchema,
     response: sessionOpenResponseSchema,
   },
+  /**
+   * The user pressed the sudo hotkey: main types the session's sign-in password,
+   * only while a sudo password prompt is showing. The password never comes here.
+   */
+  'session:fillSudo': {
+    request: sessionIdSchema,
+    response: z.undefined(),
+  },
   /** While reconnecting: try now instead of waiting for the next attempt. */
   'session:reconnectNow': {
     request: sessionIdSchema,
@@ -221,6 +234,8 @@ export type IpcInvokeArgs<C extends IpcChannel> =
 export interface IpcEventPayloads {
   'session:data': SessionDataEvent
   'session:state': SessionStateEvent
+  /** A sudo password prompt appeared or went away; canFill: a saved password exists. */
+  'session:sudo': { sessionId: string; prompt: boolean; canFill: boolean }
   'prompt:request': PromptRequest
   'prompt:cancel': { promptId: string }
 }

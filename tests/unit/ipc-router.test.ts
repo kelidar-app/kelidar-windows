@@ -64,6 +64,10 @@ describe('IPC router', () => {
       terminalTheme: 'kelidar' as const,
       hostsView: 'cards' as const,
       agent: 'auto' as const,
+      terminalFontFamily: 'Consolas',
+      terminalFontSize: 14,
+      terminalLineHeight: 1.1,
+      pasteGuard: true,
     }))
     const versionHandler = vi.fn(() => ({ version: '1.2.3' }))
     router.handle('settings:update', handler)
@@ -91,6 +95,10 @@ describe('IPC router', () => {
       terminalTheme: 'soft' as const,
       hostsView: 'cards' as const,
       agent: 'auto' as const,
+      terminalFontFamily: 'Consolas',
+      terminalFontSize: 14,
+      terminalLineHeight: 1.1,
+      pasteGuard: true,
     }))
     router.handle('settings:update', handler)
     await call('settings:update', trusted, { theme: 'dark' })
@@ -106,6 +114,10 @@ describe('IPC router', () => {
         terminalTheme: 'classic' as const,
         hostsView: 'cards' as const,
         agent: 'auto' as const,
+        terminalFontFamily: 'Consolas',
+        terminalFontSize: 14,
+        terminalLineHeight: 1.1,
+        pasteGuard: true,
         window: { width: 1 },
       }
       return withExtra
@@ -118,6 +130,10 @@ describe('IPC router', () => {
         terminalTheme: 'classic',
         hostsView: 'cards',
         agent: 'auto',
+        terminalFontFamily: 'Consolas',
+        terminalFontSize: 14,
+        terminalLineHeight: 1.1,
+        pasteGuard: true,
       },
     })
   })

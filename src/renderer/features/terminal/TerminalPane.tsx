@@ -1,6 +1,7 @@
 import {
   CircleAlert,
   Info,
+  KeyRound,
   LoaderCircle,
   Pencil,
   PlugZap,
@@ -12,39 +13,103 @@ import {
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatTarget } from '@shared/address'
+import type { ErrorCode } from '@shared/errors'
+import { SHORTCUTS } from '@renderer/app/shortcuts'
 import { Button } from '@renderer/components/ui/button'
 import { Dialog } from '@renderer/components/ui/dialog'
 import { api } from '@renderer/lib/api'
 import { cn } from '@renderer/lib/cn'
 import { useHostFormStore, useHostsStore } from '@renderer/stores/hosts'
-import { useTabsStore, type TerminalTab } from '@renderer/stores/tabs'
+import { useTabsStore, type Pane } from '@renderer/stores/tabs'
 import { TerminalView } from './TerminalView'
+import { ENVIRONMENT_BORDER, usePaneEnvironment } from './use-environment'
 
-/** A terminal tab: a status banner (while not connected) above the terminal. */
-export function TerminalPane({ tab, active }: { tab: TerminalTab; active: boolean }) {
+/**
+ * One pane: status banners above the terminal, a sudo bar below it, and a
+ * border in the host's environment color (production red…).
+ */
+export function TerminalPane({
+  pane,
+  visible,
+  focused,
+  split,
+}: {
+  pane: Pane
+  /** Its tab is the active one. */
+  visible: boolean
+  focused: boolean
+  /** The tab has more than one pane: the focused one gets a ring. */
+  split: boolean
+}) {
+  const { t } = useTranslation()
+  const environment = usePaneEnvironment(pane)
+  const focusPane = useTabsStore((state) => state.focusPane)
   return (
     <section
-      hidden={!active}
-      aria-label={tab.customTitle ?? tab.title}
-      className={cn('min-h-0 flex-1 flex-col', active ? 'flex' : 'hidden')}
-    >
-      {tab.state === 'reconnecting' ? (
-        <ReconnectingBanner tab={tab} />
-      ) : (
-        <SessionBanner tab={tab} />
+      aria-label={pane.title}
+      data-pane-id={pane.id}
+      data-pane-state={pane.state}
+      data-focused={focused ? '' : undefined}
+      data-environment={environment}
+      onMouseDown={() => {
+        focusPane(pane.id)
+      }}
+      className={cn(
+        'relative flex min-h-0 min-w-0 flex-1 flex-col',
+        environment !== undefined && cn('border-2', ENVIRONMENT_BORDER[environment]),
+        split && focused && 'outline-2 -outline-offset-2 outline-ring',
       )}
-      {tab.state === 'ready' && tab.sticky === 'unavailable' && <TmuxMissingBar />}
-      {tab.source.kind === 'quick' && tab.state === 'ready' && <SaveHostBar tab={tab} />}
-      <TerminalView tab={tab} active={active} />
+    >
+      {environment === 'production' && (
+        <span className="sr-only">{t('terminal.productionPane')}</span>
+      )}
+      {pane.state === 'reconnecting' ? (
+        <ReconnectingBanner pane={pane} />
+      ) : (
+        <SessionBanner pane={pane} />
+      )}
+      {pane.state === 'ready' && pane.sticky === 'unavailable' && <TmuxMissingBar />}
+      {pane.source.kind === 'quick' && pane.state === 'ready' && <SaveHostBar pane={pane} />}
+      <TerminalView pane={pane} visible={visible} focused={focused} />
+      {pane.state === 'ready' && pane.sudo?.canFill === true && <SudoBar pane={pane} />}
     </section>
   )
 }
 
+/**
+ * sudo asks for a password: offer the hotkey. Main types the saved password
+ * only when the hotkey is pressed, never on its own.
+ */
+function SudoBar({ pane }: { pane: Pane }) {
+  const { t } = useTranslation()
+  const [error, setError] = useState<ErrorCode | null>(null)
+  const fill = (): void => {
+    void api.invoke('session:fillSudo', { sessionId: pane.sessionId }).then((result) => {
+      setError(result.ok ? null : result.error.code)
+    })
+  }
+  return (
+    <div
+      role="status"
+      data-sudo-bar=""
+      className="flex flex-wrap items-center gap-3 border-t border-border bg-muted px-4 py-1.5 text-sm"
+    >
+      <KeyRound aria-hidden className="size-4 shrink-0 text-primary" />
+      <span className="min-w-0 flex-1">
+        {error === null ? t('terminal.sudoAsks') : t(`errors.${error}`)}
+      </span>
+      <Button size="sm" variant="outline" onClick={fill}>
+        {t('terminal.sudoFill', { shortcut: SHORTCUTS.fillSudo.label })}
+      </Button>
+    </div>
+  )
+}
+
 /** The connection dropped: count down to the next try, and offer to try now. */
-function ReconnectingBanner({ tab }: { tab: TerminalTab }) {
+function ReconnectingBanner({ pane }: { pane: Pane }) {
   const { t } = useTranslation()
   const reconnectNow = useTabsStore((state) => state.reconnectNow)
-  const close = useTabsStore((state) => state.close)
+  const close = useTabsStore((state) => state.closePane)
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -54,9 +119,9 @@ function ReconnectingBanner({ tab }: { tab: TerminalTab }) {
       window.clearInterval(timer)
     }
   }, [])
-  const target = formatTarget(tab.target)
-  const attempt = tab.reconnecting?.attempt ?? 1
-  const seconds = Math.max(0, Math.ceil(((tab.reconnecting?.retryAt ?? now) - now) / 1000))
+  const target = formatTarget(pane.target)
+  const attempt = pane.reconnecting?.attempt ?? 1
+  const seconds = Math.max(0, Math.ceil(((pane.reconnecting?.retryAt ?? now) - now) / 1000))
   return (
     <div
       role="status"
@@ -75,7 +140,7 @@ function ReconnectingBanner({ tab }: { tab: TerminalTab }) {
       <Button
         size="sm"
         onClick={() => {
-          reconnectNow(tab.id)
+          reconnectNow(pane.id)
         }}
       >
         <RotateCw aria-hidden />
@@ -85,7 +150,7 @@ function ReconnectingBanner({ tab }: { tab: TerminalTab }) {
         size="sm"
         variant="outline"
         onClick={() => {
-          close(tab.id)
+          close(pane.id)
         }}
       >
         <X aria-hidden />
@@ -130,7 +195,7 @@ function TmuxMissingBar() {
 }
 
 /** Quick Connect saved nothing; offer to save the host once connected. */
-function SaveHostBar({ tab }: { tab: TerminalTab }) {
+function SaveHostBar({ pane }: { pane: Pane }) {
   const { t } = useTranslation()
   const openNew = useHostFormStore((state) => state.openNew)
   return (
@@ -140,7 +205,7 @@ function SaveHostBar({ tab }: { tab: TerminalTab }) {
         size="sm"
         variant="outline"
         onClick={() => {
-          openNew({ ...tab.target, sessionId: tab.sessionId })
+          openNew({ ...pane.target, sessionId: pane.sessionId })
         }}
       >
         <Save aria-hidden />
@@ -150,17 +215,17 @@ function SaveHostBar({ tab }: { tab: TerminalTab }) {
   )
 }
 
-function SessionBanner({ tab }: { tab: TerminalTab }) {
+function SessionBanner({ pane }: { pane: Pane }) {
   const { t } = useTranslation()
   const reconnect = useTabsStore((state) => state.reconnect)
-  const close = useTabsStore((state) => state.close)
+  const close = useTabsStore((state) => state.closePane)
   const [confirmForget, setConfirmForget] = useState(false)
   const openEdit = useHostFormStore((state) => state.openEdit)
-  const target = formatTarget(tab.target)
-  const source = tab.source
+  const target = formatTarget(pane.target)
+  const source = pane.source
   // A sign-in problem on a saved host: the fix is in the host settings.
   const canEditHost =
-    source.kind === 'host' && (tab.error === 'SSH_AUTH_FAILED' || tab.error === 'KEY_REQUIRED')
+    source.kind === 'host' && (pane.error === 'SSH_AUTH_FAILED' || pane.error === 'KEY_REQUIRED')
   const editHost = async (): Promise<void> => {
     if (source.kind !== 'host') return
     const store = useHostsStore.getState()
@@ -169,17 +234,17 @@ function SessionBanner({ tab }: { tab: TerminalTab }) {
     if (host !== undefined) openEdit(host)
   }
 
-  if (tab.state === 'ready') return null
+  if (pane.state === 'ready') return null
 
   if (
-    tab.state === 'connecting' ||
-    tab.state === 'verifying-host-key' ||
-    tab.state === 'authenticating'
+    pane.state === 'connecting' ||
+    pane.state === 'verifying-host-key' ||
+    pane.state === 'authenticating'
   ) {
     const text =
-      tab.state === 'connecting'
+      pane.state === 'connecting'
         ? t('terminal.connecting', { target })
-        : tab.state === 'verifying-host-key'
+        : pane.state === 'verifying-host-key'
           ? t('terminal.verifying')
           : t('terminal.authenticating')
     return (
@@ -193,15 +258,15 @@ function SessionBanner({ tab }: { tab: TerminalTab }) {
     )
   }
 
-  const hostKeyChanged = tab.error === 'SSH_HOST_KEY_CHANGED'
-  const Icon = hostKeyChanged ? ShieldAlert : tab.state === 'error' ? CircleAlert : PlugZap
+  const hostKeyChanged = pane.error === 'SSH_HOST_KEY_CHANGED'
+  const Icon = hostKeyChanged ? ShieldAlert : pane.state === 'error' ? CircleAlert : PlugZap
   return (
     <div
-      role={tab.state === 'error' ? 'alert' : 'status'}
-      data-session-banner={tab.state}
+      role={pane.state === 'error' ? 'alert' : 'status'}
+      data-session-banner={pane.state}
       className={cn(
         'flex flex-col gap-3 border-b px-4 py-3 text-sm',
-        tab.state === 'error' ? 'border-destructive bg-destructive/10' : 'border-border bg-muted',
+        pane.state === 'error' ? 'border-destructive bg-destructive/10' : 'border-border bg-muted',
       )}
     >
       <div className="flex items-start gap-2">
@@ -209,27 +274,27 @@ function SessionBanner({ tab }: { tab: TerminalTab }) {
           aria-hidden
           className={cn(
             'mt-0.5 size-4 shrink-0',
-            tab.state === 'error' ? 'text-destructive' : 'text-muted-foreground',
+            pane.state === 'error' ? 'text-destructive' : 'text-muted-foreground',
           )}
         />
         <div className="flex min-w-0 flex-col gap-1">
           <p className="font-medium">
-            {tab.state === 'error'
+            {pane.state === 'error'
               ? t('terminal.failed', { target })
               : t('terminal.disconnected', { target })}
           </p>
-          {tab.error !== undefined && (
+          {pane.error !== undefined && (
             <p>
-              {tab.via === undefined
-                ? t(`errors.${tab.error}`)
-                : t('terminal.onJumpHost', { name: tab.via, message: t(`errors.${tab.error}`) })}
+              {pane.via === undefined
+                ? t(`errors.${pane.error}`)
+                : t('terminal.onJumpHost', { name: pane.via, message: t(`errors.${pane.error}`) })}
             </p>
           )}
-          {hostKeyChanged && tab.hostKey !== undefined && (
+          {hostKeyChanged && pane.hostKey !== undefined && (
             <p className="text-xs">
               {t('terminal.newFingerprint')}{' '}
               <span dir="ltr" className="font-mono break-all select-text">
-                {tab.hostKey.fingerprint}
+                {pane.hostKey.fingerprint}
               </span>
             </p>
           )}
@@ -241,7 +306,7 @@ function SessionBanner({ tab }: { tab: TerminalTab }) {
             size="sm"
             autoFocus
             onClick={() => {
-              void reconnect(tab.id)
+              void reconnect(pane.id)
             }}
           >
             <RotateCw aria-hidden />
@@ -275,7 +340,7 @@ function SessionBanner({ tab }: { tab: TerminalTab }) {
           size="sm"
           variant="outline"
           onClick={() => {
-            close(tab.id)
+            close(pane.id)
           }}
         >
           <X aria-hidden />
@@ -306,11 +371,11 @@ function SessionBanner({ tab }: { tab: TerminalTab }) {
               onClick={() => {
                 setConfirmForget(false)
                 // The server whose key changed: a jump host or the target.
-                const server = tab.hostKey ?? { host: tab.target.address, port: tab.target.port }
+                const server = pane.hostKey ?? { host: pane.target.address, port: pane.target.port }
                 void api
                   .invoke('knownHosts:forget', { host: server.host, port: server.port })
                   .then((result) => {
-                    if (result.ok) void reconnect(tab.id)
+                    if (result.ok) void reconnect(pane.id)
                   })
               }}
             >

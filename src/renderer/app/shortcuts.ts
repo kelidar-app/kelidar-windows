@@ -32,6 +32,10 @@ export const SHORTCUTS = {
   palette: shortcutOf('palette'),
   searchHosts: shortcutOf('searchHosts'),
   toggleHostsView: shortcutOf('toggleHostsView'),
+  fillSudo: shortcutOf('fillSudo'),
+  zoomIn: shortcutOf('zoomIn'),
+  zoomOut: shortcutOf('zoomOut'),
+  zoomReset: shortcutOf('zoomReset'),
 } as const
 
 /**

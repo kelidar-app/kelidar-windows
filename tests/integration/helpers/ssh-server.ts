@@ -60,6 +60,8 @@ export interface TestServer {
   forwards: { host: string; port: number }[]
   /** tmux sessions started or resumed, by name, in order. */
   tmuxAttaches: string[]
+  /** Passwords typed at the fake sudo prompt ("sudo whoami"), and whether each was right. */
+  sudoAnswers: { password: string; right: boolean }[]
   close: () => Promise<void>
 }
 
@@ -100,6 +102,7 @@ export async function startTestServer(options: TestServerOptions = {}): Promise<
     keyboardQuestions: [],
     forwards: [],
     tmuxAttaches: [],
+    sudoAnswers: [],
   }
   const tmuxSessions = new Set<string>()
 
@@ -172,18 +175,32 @@ export async function startTestServer(options: TestServerOptions = {}): Promise<
       shells--
     })
     let line = ''
+    // Like sudo: after the prompt, input is not echoed until Enter.
+    let sudoPrompt = false
     stream.on('data', (chunk: Buffer) => {
       const text = chunk.toString('utf8')
       state.received.push(text)
-      stream.write(text)
+      if (!sudoPrompt) stream.write(text)
       line += text
       if (!line.includes('\r')) return
-      const command = line.split('\r')[0]?.trim() ?? ''
+      const command = line.split('\r')[0] ?? ''
       line = ''
-      if (command === 'exit') {
+      if (sudoPrompt) {
+        sudoPrompt = false
+        const right = command === options.password
+        state.sudoAnswers.push({ password: command, right })
+        stream.write(right ? '\r\nroot\r\n$ ' : '\r\nSorry, try again.\r\n$ ')
+        return
+      }
+      if (command.trim() === 'sudo whoami') {
+        sudoPrompt = true
+        stream.write(`\r\n\x1b[1m[sudo] password for ${username}:\x1b[0m `)
+        return
+      }
+      if (command.trim() === 'exit') {
         stream.exit(0)
         stream.end()
-      } else if (command === 'big') {
+      } else if (command.trim() === 'big') {
         writeBig(stream, options.bigOutputBytes ?? 4 * 1024 * 1024)
       }
     })

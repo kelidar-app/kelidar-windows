@@ -5,6 +5,7 @@
 export const IPC_EVENTS = [
   'session:data',
   'session:state',
+  'session:sudo',
   'prompt:request',
   'prompt:cancel',
 ] as const

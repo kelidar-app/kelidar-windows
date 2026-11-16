@@ -174,6 +174,7 @@ function RootPage({
   const { t } = useTranslation()
   const openHost = useTabsStore((state) => state.openHost)
   const activate = useTabsStore((state) => state.activate)
+  const panes = useTabsStore((state) => state.panes)
   const update = useSettingsStore((state) => state.update)
   const settings = useSettingsStore((state) => state.settings)
   const themeIcon: Record<Theme, ReactNode> = {
@@ -228,7 +229,10 @@ function RootPage({
             <Command.Item
               key={tab.id}
               value={`tab:${tab.id}`}
-              keywords={[tabTitle(tab), t('palette.switchTab', { title: tabTitle(tab) })]}
+              keywords={[
+                tabTitle(tab, panes),
+                t('palette.switchTab', { title: tabTitle(tab, panes) }),
+              ]}
               className={ITEM}
               onSelect={() => {
                 run(() => {
@@ -237,7 +241,9 @@ function RootPage({
               }}
             >
               <SquareTerminal aria-hidden className="size-4 shrink-0" />
-              <span className="truncate">{t('palette.switchTab', { title: tabTitle(tab) })}</span>
+              <span className="truncate">
+                {t('palette.switchTab', { title: tabTitle(tab, panes) })}
+              </span>
             </Command.Item>
           ))}
         </Command.Group>

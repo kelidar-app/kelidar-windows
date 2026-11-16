@@ -4,7 +4,19 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { migrateSettings, type SettingsMigration } from '../../src/main/settings/migrations'
 import { SETTINGS_FILE_NAME, SettingsStore } from '../../src/main/settings/store'
-import { pickDefaultLanguage, SETTINGS_VERSION } from '../../src/shared/settings'
+import {
+  DEFAULT_UI_SETTINGS,
+  pickDefaultLanguage,
+  SETTINGS_VERSION,
+} from '../../src/shared/settings'
+
+/** The terminal settings every file gets (version 5). */
+const TERMINAL = {
+  terminalFontFamily: DEFAULT_UI_SETTINGS.terminalFontFamily,
+  terminalFontSize: DEFAULT_UI_SETTINGS.terminalFontSize,
+  terminalLineHeight: DEFAULT_UI_SETTINGS.terminalLineHeight,
+  pasteGuard: true,
+}
 
 describe('migrateSettings', () => {
   const migrations: SettingsMigration[] = [
@@ -78,6 +90,7 @@ describe('SettingsStore', () => {
       terminalTheme: 'kelidar',
       hostsView: 'cards',
       agent: 'auto',
+      ...TERMINAL,
     })
     expect(await readJson()).toEqual({
       version: SETTINGS_VERSION,
@@ -86,6 +99,7 @@ describe('SettingsStore', () => {
       terminalTheme: 'kelidar',
       hostsView: 'cards',
       agent: 'auto',
+      ...TERMINAL,
     })
   })
 
@@ -99,6 +113,7 @@ describe('SettingsStore', () => {
         terminalTheme: 'soft',
         hostsView: 'cards',
         agent: 'auto',
+        ...TERMINAL,
       }),
     )
     const store = await SettingsStore.open({ directory: dir, defaultLanguage: 'en' })
@@ -108,10 +123,11 @@ describe('SettingsStore', () => {
       terminalTheme: 'soft',
       hostsView: 'cards',
       agent: 'auto',
+      ...TERMINAL,
     })
   })
 
-  it('migrates a version 1 file and saves it as version 4', async () => {
+  it('migrates a version 1 file and saves it as version 5', async () => {
     await writeFile(file, JSON.stringify({ version: 1, language: 'fa', theme: 'dark' }))
     const store = await SettingsStore.open({ directory: dir, defaultLanguage: 'en' })
     expect(store.getUi()).toEqual({
@@ -120,14 +136,16 @@ describe('SettingsStore', () => {
       terminalTheme: 'kelidar',
       hostsView: 'cards',
       agent: 'auto',
+      ...TERMINAL,
     })
     expect(await readJson()).toEqual({
-      version: 4,
+      version: 5,
       language: 'fa',
       theme: 'dark',
       terminalTheme: 'kelidar',
       hostsView: 'cards',
       agent: 'auto',
+      ...TERMINAL,
     })
   })
 
@@ -140,20 +158,23 @@ describe('SettingsStore', () => {
       terminalTheme: 'kelidar',
       hostsView: 'cards',
       agent: 'auto',
+      ...TERMINAL,
     })
     await store.updateUi({
       language: 'fa',
       terminalTheme: 'contrast',
       hostsView: 'cards',
       agent: 'auto',
+      ...TERMINAL,
     })
     expect(await readJson()).toEqual({
-      version: 4,
+      version: 5,
       language: 'fa',
       theme: 'light',
       terminalTheme: 'contrast',
       hostsView: 'cards',
       agent: 'auto',
+      ...TERMINAL,
       window: { width: 1000, height: 700, x: 10, y: 20, maximized: false },
     })
     expect((await readdir(dir)).filter((name) => name.endsWith('.tmp'))).toEqual([])
@@ -168,12 +189,13 @@ describe('SettingsStore', () => {
     ])
     await store.flush()
     expect(await readJson()).toEqual({
-      version: 4,
+      version: 5,
       language: 'fa',
       theme: 'light',
       terminalTheme: 'kelidar',
       hostsView: 'cards',
       agent: 'auto',
+      ...TERMINAL,
     })
   })
 
@@ -187,6 +209,7 @@ describe('SettingsStore', () => {
       terminalTheme: 'kelidar',
       hostsView: 'cards',
       agent: 'auto',
+      ...TERMINAL,
     })
     const names = await readdir(dir)
     expect(names.some((name) => name.startsWith(`${SETTINGS_FILE_NAME}.broken-`))).toBe(true)
@@ -202,6 +225,7 @@ describe('SettingsStore', () => {
       terminalTheme: 'kelidar',
       hostsView: 'cards',
       agent: 'auto',
+      ...TERMINAL,
     })
   })
 

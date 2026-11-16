@@ -3,7 +3,15 @@ import type { KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { SessionState } from '@shared/session'
 import { cn } from '@renderer/lib/cn'
-import { HOME_TAB, tabTitle, useTabsStore, type TerminalTab } from '@renderer/stores/tabs'
+import { paneIds } from '@renderer/features/terminal/layout'
+import { ENVIRONMENT_TAB, usePaneEnvironment } from '@renderer/features/terminal/use-environment'
+import {
+  focusedPane,
+  HOME_TAB,
+  tabTitle,
+  useTabsStore,
+  type TerminalTab,
+} from '@renderer/stores/tabs'
 import { useUiStore } from '@renderer/stores/ui'
 import { SHORTCUTS } from './shortcuts'
 
@@ -104,9 +112,14 @@ function SessionTab({ tab, selected }: { tab: TerminalTab; selected: boolean }) 
   const editing = useTabsStore((state) => state.renamingId === tab.id)
   const startRename = useTabsStore((state) => state.startRename)
   const stopRename = useTabsStore((state) => state.stopRename)
-  const title = tabTitle(tab)
+  const panes = useTabsStore((state) => state.panes)
+  const pane = focusedPane(tab, panes)
+  const environment = usePaneEnvironment(pane)
+  const state = pane?.state ?? 'closed'
+  const title = tabTitle(tab, panes)
+  const paneCount = paneIds(tab.layout).length
 
-  const stateLabel = t(`terminal.state.${tab.state}`)
+  const stateLabel = t(`terminal.state.${state}`)
   const closeLabel = t('nav.withShortcut', {
     label: t('titleBar.closeTab', { title }),
     shortcut: SHORTCUTS.closeTab.label,
@@ -141,12 +154,23 @@ function SessionTab({ tab, selected }: { tab: TerminalTab; selected: boolean }) 
   }
 
   return (
-    <div className={tabClass(selected)} data-tab-state={tab.state}>
+    <div
+      className={cn(
+        tabClass(selected),
+        environment !== undefined && cn('border-t-2', ENVIRONMENT_TAB[environment]),
+      )}
+      data-tab-state={state}
+      data-environment={environment}
+    >
       <button
         type="button"
         role="tab"
         aria-selected={selected}
-        aria-description={stateLabel}
+        aria-description={
+          environment === undefined
+            ? stateLabel
+            : `${stateLabel}, ${t(`environments.${environment}`)}`
+        }
         title={`${title} (${stateLabel})`}
         onClick={() => {
           activate(tab.id)
@@ -159,8 +183,16 @@ function SessionTab({ tab, selected }: { tab: TerminalTab; selected: boolean }) 
         }}
         className="flex max-w-48 min-w-0 items-center gap-2"
       >
-        <span aria-hidden className={cn('size-2 shrink-0 rounded-full', DOT_CLASS[tab.state])} />
+        <span aria-hidden className={cn('size-2 shrink-0 rounded-full', DOT_CLASS[state])} />
         <span className="truncate">{title}</span>
+        {paneCount > 1 && (
+          <span
+            aria-label={t('titleBar.paneCount', { count: paneCount })}
+            className="shrink-0 rounded bg-muted px-1 text-[0.6875rem] text-muted-foreground"
+          >
+            {paneCount}
+          </span>
+        )}
       </button>
       <button
         type="button"

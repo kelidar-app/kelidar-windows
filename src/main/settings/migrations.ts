@@ -1,4 +1,4 @@
-import { SETTINGS_VERSION } from '@shared/settings'
+import { DEFAULT_UI_SETTINGS, SETTINGS_VERSION } from '@shared/settings'
 
 export type SettingsData = Record<string, unknown>
 
@@ -8,11 +8,22 @@ export interface SettingsMigration {
   migrate: (data: SettingsData) => SettingsData
 }
 
-/** One step per version. Version 2 added the terminal theme, version 3 the hosts view, version 4 the agent. */
+/** One step per version. Version 2 added the terminal theme, version 3 the hosts view, version 4 the agent, version 5 terminal fonts and the paste guard. */
 export const SETTINGS_MIGRATIONS: readonly SettingsMigration[] = [
   { from: 1, migrate: (v1) => ({ ...v1, version: 2, terminalTheme: 'kelidar' }) },
   { from: 2, migrate: (v2) => ({ ...v2, version: 3, hostsView: 'cards' }) },
   { from: 3, migrate: (v3) => ({ ...v3, version: 4, agent: 'auto' }) },
+  {
+    from: 4,
+    migrate: (v4) => ({
+      ...v4,
+      version: 5,
+      terminalFontFamily: DEFAULT_UI_SETTINGS.terminalFontFamily,
+      terminalFontSize: DEFAULT_UI_SETTINGS.terminalFontSize,
+      terminalLineHeight: DEFAULT_UI_SETTINGS.terminalLineHeight,
+      pasteGuard: true,
+    }),
+  },
 ]
 
 export type MigrationResult =

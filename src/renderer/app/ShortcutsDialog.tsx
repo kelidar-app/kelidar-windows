@@ -5,7 +5,7 @@ import { HOST_KEYS } from '@renderer/features/hosts/host-keys'
 import { useUiStore } from '@renderer/stores/ui'
 import { COMMANDS, comboLabel, type CommandSection } from './commands'
 
-const SECTIONS: readonly CommandSection[] = ['general', 'hosts', 'keychain', 'tabs']
+const SECTIONS: readonly CommandSection[] = ['general', 'hosts', 'keychain', 'tabs', 'terminal']
 
 function Keys({ keys }: { keys: readonly string[] }) {
   return (

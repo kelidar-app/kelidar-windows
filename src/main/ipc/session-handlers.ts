@@ -45,6 +45,11 @@ export function registerSessionHandlers<E extends InvokeEventLike>(
     sessions.duplicate(deps.ownerOf(event), sessionId, cols, rows),
   )
 
+  router.handle('session:fillSudo', ({ sessionId }, event) => {
+    sessions.fillSudo(deps.ownerOf(event), sessionId)
+    return undefined
+  })
+
   router.handle('session:reconnectNow', ({ sessionId }, event) => {
     sessions.reconnectNow(deps.ownerOf(event), sessionId)
     return undefined

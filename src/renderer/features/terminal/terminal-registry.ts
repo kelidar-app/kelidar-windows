@@ -1,18 +1,19 @@
-/** Actions of mounted terminals, by tab id, so keyboard shortcuts can reach them. */
+/** Actions of mounted terminals, by pane id, so keyboard shortcuts can reach them. */
 export interface TerminalActions {
   paste: () => void
   focus: () => void
+  openSearch: () => void
 }
 
 const terminals = new Map<string, TerminalActions>()
 
-export function registerTerminal(tabId: string, actions: TerminalActions): () => void {
-  terminals.set(tabId, actions)
+export function registerTerminal(paneId: string, actions: TerminalActions): () => void {
+  terminals.set(paneId, actions)
   return () => {
-    if (terminals.get(tabId) === actions) terminals.delete(tabId)
+    if (terminals.get(paneId) === actions) terminals.delete(paneId)
   }
 }
 
-export function terminalActions(tabId: string): TerminalActions | undefined {
-  return terminals.get(tabId)
+export function terminalActions(paneId: string): TerminalActions | undefined {
+  return terminals.get(paneId)
 }
