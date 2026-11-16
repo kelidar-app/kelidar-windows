@@ -71,6 +71,19 @@ export const COMMANDS: readonly AppCommand[] = [
     useUiStore.getState().showSection('hosts')
     void settings.update({ hostsView: settings.settings.hostsView === 'cards' ? 'list' : 'cards' })
   }),
+  command(
+    'duplicateTab',
+    'tabs',
+    () => {
+      const tabs = useTabsStore.getState()
+      void tabs.duplicate(tabs.activeId)
+    },
+    () => {
+      const tabs = useTabsStore.getState()
+      const active = tabs.tabs.find((tab) => tab.id === tabs.activeId)
+      return active !== undefined && active.state !== 'closed' && active.state !== 'error'
+    },
+  ),
   command('newIdentity', 'keychain', () => {
     useUiStore.getState().showSection('keychain')
     useKeychainDialogStore.getState().open({ kind: 'identity' })

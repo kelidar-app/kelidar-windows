@@ -12,6 +12,7 @@ const DOT_CLASS: Record<SessionState, string> = {
   'verifying-host-key': 'bg-amber-500 animate-pulse',
   authenticating: 'bg-amber-500 animate-pulse',
   ready: 'bg-emerald-500',
+  reconnecting: 'bg-amber-500 animate-pulse',
   closed: 'bg-muted-foreground',
   error: 'bg-destructive',
 }

@@ -31,6 +31,10 @@ export interface TestServerOptions {
   otp?: string
   /** Exit code of commands run over exec (default 0). */
   execExitCode?: number
+  /** Pretend tmux is installed (for sticky sessions). */
+  tmux?: boolean
+  /** Refuse to forward TCP for jump host use (AllowTcpForwarding no). */
+  noForwarding?: boolean
 }
 
 export interface TestServer {
@@ -50,6 +54,10 @@ export interface TestServer {
   agentForwardRequests: () => number
   /** Questions asked over keyboard-interactive. */
   keyboardQuestions: string[]
+  /** TCP forwards asked of this server as a jump host. */
+  forwards: { host: string; port: number }[]
+  /** tmux sessions started or resumed, by name, in order. */
+  tmuxAttaches: string[]
   close: () => Promise<void>
 }
 
@@ -88,7 +96,10 @@ export async function startTestServer(options: TestServerOptions = {}): Promise<
     execs: [],
     agentForwardRequests: () => agentForwards,
     keyboardQuestions: [],
+    forwards: [],
+    tmuxAttaches: [],
   }
+  const tmuxSessions = new Set<string>()
 
   const onAuth = (ctx: AuthContext, connection: { passwordPassed: boolean }): void => {
     state.authAttempts.push({ method: ctx.method, username: ctx.username })
@@ -184,6 +195,26 @@ export async function startTestServer(options: TestServerOptions = {}): Promise<
       onAuth(ctx, perConnection)
     })
     connection.on('ready', () => {
+      // Jump host use: forward TCP to the next server.
+      connection.on('tcpip', (accept, reject, info) => {
+        state.forwards.push({ host: info.destIP, port: info.destPort })
+        if (options.noForwarding === true) {
+          reject()
+          return
+        }
+        const socket = net.connect(info.destPort, info.destIP)
+        socket.on('error', () => undefined)
+        socket.on('connect', () => {
+          const channel = accept()
+          channel.pipe(socket).pipe(channel)
+          channel.on('close', () => {
+            socket.destroy()
+          })
+          socket.on('close', () => {
+            channel.close()
+          })
+        })
+      })
       connection.on('session', (acceptSession) => {
         const session = acceptSession()
         session.on('pty', (accept, _reject, info) => {
@@ -205,6 +236,20 @@ export async function startTestServer(options: TestServerOptions = {}): Promise<
         session.on('exec', (accept, _reject, info) => {
           const stream = accept()
           state.execs.push(info.command)
+          // Sticky sessions: the tmux check, then the shell inside tmux.
+          if (info.command.startsWith('command -v tmux')) {
+            const name = /has-session -t (\S+)/.exec(info.command)?.[1] ?? ''
+            stream.exit(options.tmux === true ? (tmuxSessions.has(name) ? 3 : 0) : 127)
+            stream.end()
+            return
+          }
+          const tmux = /^tmux new-session -A -s (\S+)$/.exec(info.command)
+          if (tmux?.[1] !== undefined) {
+            tmuxSessions.add(tmux[1])
+            state.tmuxAttaches.push(tmux[1])
+            runShell(stream)
+            return
+          }
           // "Install" a key the way the real command would.
           const added = /'(ssh-[\w-]+ [A-Za-z0-9+/=]+) kelidar'/.exec(info.command)
           if (added?.[1] !== undefined && (options.execExitCode ?? 0) === 0) {
@@ -262,11 +307,17 @@ function writeBig(stream: ServerChannel, total: number): void {
 export async function startDropProxy(targetPort: number): Promise<{
   port: number
   drop: () => void
+  /** The network is back: dead connections are gone, new ones work. */
+  restore: () => void
+  /** Connections made through the proxy so far. */
+  connections: () => number
   close: () => Promise<void>
 }> {
+  let made = 0
   const sockets: net.Socket[] = []
   let dropped = false
   const server = net.createServer((inbound) => {
+    made++
     const outbound = net.connect(targetPort, '127.0.0.1')
     sockets.push(inbound, outbound)
     for (const socket of [inbound, outbound]) socket.on('error', () => undefined)
@@ -289,6 +340,11 @@ export async function startDropProxy(targetPort: number): Promise<{
     drop: () => {
       dropped = true
     },
+    restore: () => {
+      for (const socket of sockets.splice(0)) socket.destroy()
+      dropped = false
+    },
+    connections: () => made,
     close: () =>
       new Promise<void>((resolve) => {
         for (const socket of sockets) socket.destroy()

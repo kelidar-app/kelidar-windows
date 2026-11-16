@@ -27,6 +27,12 @@ export interface TerminalTab {
   state: SessionState
   error?: ErrorCode
   hostKey?: HostKeyInfo
+  /** The jump host an error happened on. */
+  via?: string
+  /** While reconnecting: attempt number and when the next try starts (epoch ms). */
+  reconnecting?: { attempt: number; retryAt: number }
+  /** For a sticky session: tmux started, resumed, or missing on the server. */
+  sticky?: 'started' | 'resumed' | 'unavailable'
   /** Increments on each reconnect; the terminal prints a divider. */
   generation: number
 }
@@ -45,6 +51,10 @@ interface TabsState {
   /** After "Save host": the tab now belongs to the saved host. */
   adoptHost: (sessionId: string, host: { id: string; name: string }) => void
   reconnect: (tabId: string) => Promise<void>
+  /** While reconnecting: try now instead of waiting. */
+  reconnectNow: (tabId: string) => void
+  /** A new tab on the same connection: a new channel, no new sign-in. */
+  duplicate: (tabId: string) => Promise<boolean>
   activate: (tabId: string) => void
   activateNext: (step: 1 | -1) => void
   close: (tabId: string) => void
@@ -61,10 +71,22 @@ const earlyStates = new Map<string, SessionStateEvent[]>()
 
 function applyEvent(tab: TerminalTab, event: SessionStateEvent): TerminalTab {
   const next: TerminalTab = { ...tab, state: event.state }
-  if (event.error === undefined) delete next.error
-  else next.error = event.error
-  if (event.hostKey === undefined) delete next.hostKey
-  else next.hostKey = event.hostKey
+  // Back after a drop: the terminal marks where the new connection starts.
+  if (tab.state === 'reconnecting' && event.state === 'ready') next.generation += 1
+  const optional = {
+    error: event.error,
+    hostKey: event.hostKey,
+    via: event.via,
+    reconnecting: event.reconnect,
+  } as const
+  for (const [key, value] of Object.entries(optional)) {
+    if (value === undefined) Reflect.deleteProperty(next, key)
+    else Reflect.set(next, key, value)
+  }
+  if (event.state === 'ready') {
+    if (event.sticky === undefined) delete next.sticky
+    else next.sticky = event.sticky
+  }
   return next
 }
 
@@ -148,6 +170,42 @@ export const useTabsStore = create<TabsState>()((set, get) => {
           return withEarlyStates(next)
         }),
       }))
+    },
+
+    reconnectNow: (tabId) => {
+      const tab = get().tabs.find((item) => item.id === tabId)
+      if (tab?.state === 'reconnecting') {
+        void api.invoke('session:reconnectNow', { sessionId: tab.sessionId })
+      }
+    },
+
+    duplicate: async (tabId) => {
+      const tab = get().tabs.find((item) => item.id === tabId)
+      if (tab === undefined) return false
+      const result = await api.invoke('session:duplicate', {
+        sessionId: tab.sessionId,
+        ...INITIAL_SIZE,
+      })
+      if (!result.ok) {
+        set({ openError: result.error.code })
+        return false
+      }
+      const copy = withEarlyStates({
+        id: crypto.randomUUID(),
+        sessionId: result.data.sessionId,
+        source: tab.source,
+        title: result.data.title,
+        target: result.data.target,
+        state: 'connecting',
+        generation: 0,
+      })
+      set((state) => {
+        const index = state.tabs.findIndex((item) => item.id === tabId)
+        const tabs = [...state.tabs]
+        tabs.splice(index + 1, 0, copy)
+        return { tabs, activeId: copy.id }
+      })
+      return true
     },
 
     activate: (tabId) => {

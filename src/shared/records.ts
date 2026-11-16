@@ -75,10 +75,30 @@ export const groupDefaultsSchema = z.object({
   environment: environmentSchema.optional(),
   /** Hosts that set neither a user name nor an identity sign in with this one. */
   identityId: idSchema.optional(),
+  /** Hosts in the group connect through this host unless they say otherwise. */
+  jumpHostId: idSchema.optional(),
 })
 export type GroupDefaults = z.infer<typeof groupDefaultsSchema>
 
 export const MAX_GROUP_DEPTH = 8
+
+export const PROXY_TYPES = ['socks5', 'http'] as const
+export const proxyTypeSchema = z.enum(PROXY_TYPES)
+export type ProxyType = z.infer<typeof proxyTypeSchema>
+
+export const proxyRecordSchema = z.object({
+  type: proxyTypeSchema,
+  host: z.string().min(1).max(255),
+  port: portSchema,
+  username: z.string().min(1).max(255).optional(),
+  /** The proxy password, a secret owned by the host. */
+  secretId: idSchema.optional(),
+})
+export type ProxyRecord = z.infer<typeof proxyRecordSchema>
+
+export const MAX_STARTUP_COMMAND = 1000
+/** Jump hosts in a row, at most. */
+export const MAX_JUMP_HOSTS = 5
 
 export const groupRecordSchema = baseRecordSchema.extend({
   name: z.string().min(1).max(200),
@@ -106,6 +126,16 @@ export const hostRecordSchema = baseRecordSchema.extend({
   auth: authRefSchema.optional(),
   /** Forward the local agent to this server (only for servers the user trusts). */
   agentForward: z.boolean().optional(),
+  /** Connect through another saved host. Unset: the group's jump host, if any. */
+  jumpHostId: idSchema.optional(),
+  /** Connect directly even when the group names a jump host. */
+  directConnect: z.boolean().optional(),
+  /** A SOCKS5 or HTTP proxy for the connection from this computer. */
+  proxy: proxyRecordSchema.optional(),
+  /** Typed into the shell right after sign-in. */
+  startupCommand: z.string().min(1).max(MAX_STARTUP_COMMAND).optional(),
+  /** Run the shell inside tmux, so work survives a dropped connection. */
+  stickySession: z.boolean().optional(),
   lastConnectedAt: timestampSchema.optional(),
 })
 

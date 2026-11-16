@@ -1,5 +1,6 @@
 import {
   CircleAlert,
+  Info,
   LoaderCircle,
   Pencil,
   PlugZap,
@@ -8,7 +9,7 @@ import {
   ShieldAlert,
   X,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatTarget } from '@shared/address'
 import { Button } from '@renderer/components/ui/button'
@@ -27,10 +28,104 @@ export function TerminalPane({ tab, active }: { tab: TerminalTab; active: boolea
       aria-label={tab.customTitle ?? tab.title}
       className={cn('min-h-0 flex-1 flex-col', active ? 'flex' : 'hidden')}
     >
-      <SessionBanner tab={tab} />
+      {tab.state === 'reconnecting' ? (
+        <ReconnectingBanner tab={tab} />
+      ) : (
+        <SessionBanner tab={tab} />
+      )}
+      {tab.state === 'ready' && tab.sticky === 'unavailable' && <TmuxMissingBar />}
       {tab.source.kind === 'quick' && tab.state === 'ready' && <SaveHostBar tab={tab} />}
       <TerminalView tab={tab} active={active} />
     </section>
+  )
+}
+
+/** The connection dropped: count down to the next try, and offer to try now. */
+function ReconnectingBanner({ tab }: { tab: TerminalTab }) {
+  const { t } = useTranslation()
+  const reconnectNow = useTabsStore((state) => state.reconnectNow)
+  const close = useTabsStore((state) => state.close)
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setNow(Date.now())
+    }, 1000)
+    return () => {
+      window.clearInterval(timer)
+    }
+  }, [])
+  const target = formatTarget(tab.target)
+  const attempt = tab.reconnecting?.attempt ?? 1
+  const seconds = Math.max(0, Math.ceil(((tab.reconnecting?.retryAt ?? now) - now) / 1000))
+  return (
+    <div
+      role="status"
+      data-session-banner="reconnecting"
+      className="flex flex-wrap items-center gap-3 border-b border-amber-500/40 bg-amber-500/10 px-4 py-2 text-sm"
+    >
+      <LoaderCircle aria-hidden className="size-4 shrink-0 animate-spin text-amber-600" />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <p className="font-medium">{t('terminal.connectionLost', { target })}</p>
+        <p className="text-muted-foreground">
+          {seconds > 0
+            ? t('terminal.reconnectingIn', { count: seconds, attempt })
+            : t('terminal.reconnectingNow', { attempt })}
+        </p>
+      </div>
+      <Button
+        size="sm"
+        onClick={() => {
+          reconnectNow(tab.id)
+        }}
+      >
+        <RotateCw aria-hidden />
+        {t('terminal.reconnectNow')}
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={() => {
+          close(tab.id)
+        }}
+      >
+        <X aria-hidden />
+        {t('terminal.closeTab')}
+      </Button>
+    </div>
+  )
+}
+
+/** Sticky session asked for, but the server has no tmux: a normal shell opened. */
+function TmuxMissingBar() {
+  const { t } = useTranslation()
+  const [hidden, setHidden] = useState(false)
+  if (hidden) return null
+  return (
+    <div
+      role="status"
+      className="flex items-start gap-3 border-b border-border bg-muted px-4 py-2 text-sm"
+    >
+      <Info aria-hidden className="mt-0.5 size-4 shrink-0 text-primary" />
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <p>{t('terminal.tmuxMissing')}</p>
+        <p className="text-xs text-muted-foreground">{t('terminal.tmuxInstall')}</p>
+        <ul dir="ltr" className="flex flex-col gap-0.5 text-start font-mono text-xs select-text">
+          <li>sudo apt install tmux</li>
+          <li>sudo dnf install tmux</li>
+          <li>sudo apk add tmux</li>
+        </ul>
+      </div>
+      <Button
+        size="icon"
+        variant="ghost"
+        aria-label={t('common.close')}
+        onClick={() => {
+          setHidden(true)
+        }}
+      >
+        <X aria-hidden />
+      </Button>
+    </div>
   )
 }
 
@@ -123,7 +218,13 @@ function SessionBanner({ tab }: { tab: TerminalTab }) {
               ? t('terminal.failed', { target })
               : t('terminal.disconnected', { target })}
           </p>
-          {tab.error !== undefined && <p>{t(`errors.${tab.error}`)}</p>}
+          {tab.error !== undefined && (
+            <p>
+              {tab.via === undefined
+                ? t(`errors.${tab.error}`)
+                : t('terminal.onJumpHost', { name: tab.via, message: t(`errors.${tab.error}`) })}
+            </p>
+          )}
           {hostKeyChanged && tab.hostKey !== undefined && (
             <p className="text-xs">
               {t('terminal.newFingerprint')}{' '}
@@ -204,8 +305,10 @@ function SessionBanner({ tab }: { tab: TerminalTab }) {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
               onClick={() => {
                 setConfirmForget(false)
+                // The server whose key changed: a jump host or the target.
+                const server = tab.hostKey ?? { host: tab.target.address, port: tab.target.port }
                 void api
-                  .invoke('knownHosts:forget', { host: tab.target.address, port: tab.target.port })
+                  .invoke('knownHosts:forget', { host: server.host, port: server.port })
                   .then((result) => {
                     if (result.ok) void reconnect(tab.id)
                   })

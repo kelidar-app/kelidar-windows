@@ -32,6 +32,8 @@ export const IPC_CHANNELS = [
   'session:resize',
   'session:ack',
   'session:close',
+  'session:duplicate',
+  'session:reconnectNow',
   'settings:get',
   'settings:update',
   'window:setTitleBarOverlay',

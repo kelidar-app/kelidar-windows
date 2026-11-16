@@ -285,8 +285,15 @@ describe('sessions against an in-process ssh2 server', () => {
     expect(batches()).toBeLessThan(total / (16 * 1024))
   })
 
-  it('shows a lost connection when the network drops', async () => {
-    const h = await setup({ timing: { keepaliveIntervalMs: 100, keepaliveCountMax: 2 } })
+  it('shows a dropped network on the tab and reconnects by itself when it returns', async () => {
+    const h = await setup({
+      timing: {
+        keepaliveIntervalMs: 100,
+        keepaliveCountMax: 2,
+        readyTimeoutMs: 400,
+        reconnectDelaysMs: [50, 100, 200],
+      },
+    })
     const srv = await server()
     const proxy = await startDropProxy(srv.port)
     cleanups.push(proxy.close)
@@ -294,11 +301,23 @@ describe('sessions against an in-process ssh2 server', () => {
     const id = await open(h, host.id)
     await trustHostKey(h)
     await waitForState(h, id, 'ready')
+
     proxy.drop()
-    expect(await waitForFinal(h, id)).toMatchObject({
-      state: 'error',
-      error: 'SSH_CONNECTION_LOST',
+    const reconnecting = await waitForState(h, id, 'reconnecting')
+    expect(reconnecting.reconnect?.attempt).toBe(1)
+    expect(reconnecting.reconnect?.retryAt).toBeGreaterThan(0)
+    // Attempts keep failing while the network is down, each one counted.
+    await waitFor(() => h.sink.states(id).filter((s) => s.state === 'reconnecting').length >= 3, {
+      label: 'several attempts',
     })
+    proxy.restore()
+    await waitFor(() => h.sink.states(id).filter((s) => s.state === 'ready').length === 2, {
+      label: 'ready again',
+    })
+    // Same tab, new connection, no password question.
+    expect(h.sink.prompts().filter((p) => p.kind === 'password')).toEqual([])
+    await h.call('session:input', { sessionId: id, data: 'after the drop\r' })
+    await waitFor(() => h.sink.output(id).includes('after the drop'), { label: 'echo' })
   })
 
   it('maps a closed port to SSH_CONNECTION_REFUSED', async () => {

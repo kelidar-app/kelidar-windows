@@ -54,6 +54,13 @@ export class GroupService {
       ) {
         throw new AppError('IDENTITY_NOT_FOUND')
       }
+      const jumpHostId = request.defaults?.jumpHostId
+      if (
+        jumpHostId !== undefined &&
+        !data.hosts.some((item) => item.id === jumpHostId && live(item))
+      ) {
+        throw new AppError('JUMP_HOST_NOT_FOUND')
+      }
       const problem = checkParent(request.id, request.parentId, groups)
       if (problem === 'not-found') throw new AppError('GROUP_NOT_FOUND')
       if (problem === 'cycle') throw new AppError('GROUP_PARENT_INVALID')
@@ -78,6 +85,7 @@ export class GroupService {
           ? {}
           : { environment: request.defaults.environment }),
         ...(identityId === undefined ? {} : { identityId }),
+        ...(jumpHostId === undefined ? {} : { jumpHostId }),
       }
       if (Object.keys(defaults).length === 0) delete group.defaults
       else group.defaults = defaults

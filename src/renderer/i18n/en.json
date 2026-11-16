@@ -57,7 +57,8 @@
     "resultCount_other": "{{count}} hosts",
     "searchHint": "Press Enter to connect to the first result. Start a word with # to search tags only.",
     "signInIdentity": "Signs in with the identity {{name}}",
-    "signInAgent": "Signs in with a key from the SSH agent"
+    "signInAgent": "Signs in with a key from the SSH agent",
+    "via": "via {{name}}"
   },
   "settings": {
     "title": "Settings",
@@ -128,7 +129,13 @@
     "KEY_UPGRADE_NOT_NEEDED": "This host already signs in with a key or the agent, so there is nothing to upgrade.",
     "KEY_UPGRADE_INSTALL_FAILED": "The server did not accept the command, so the key was not added. Check that the account has a home folder and a POSIX shell, then try again. Nothing was changed on this host.",
     "KEY_UPGRADE_TEST_FAILED": "The key was added to the server, but signing in with it did not work. The server may not allow key sign-in (PubkeyAuthentication in sshd_config). This host still signs in with its password.",
-    "OPERATION_CANCELLED": "You cancelled, so nothing was changed."
+    "OPERATION_CANCELLED": "You cancelled, so nothing was changed.",
+    "JUMP_HOST_NOT_FOUND": "The jump host of this host no longer exists; it may have been deleted. Choose another jump host in the host settings.",
+    "JUMP_HOST_LOOP": "The jump hosts lead back to this host, or there are more than five in a row. Choose a jump host that does not lead back here.",
+    "JUMP_FORWARD_FAILED": "The jump host did not let the connection through. Check that the next server's address and port are right, and that AllowTcpForwarding is on in the jump host's sshd_config.",
+    "PROXY_UNREACHABLE": "The proxy could not be reached. Check its address and port and that it is running, then connect again.",
+    "PROXY_AUTH_FAILED": "The proxy did not accept the user name or password. Check them in the host settings, then connect again.",
+    "PROXY_REFUSED": "The proxy refused to connect to the server. The proxy may block this address or port. Check the proxy's rules, then connect again."
   },
   "common": {
     "save": "Save",
@@ -190,7 +197,27 @@
     "identityRequired": "Choose the identity this host signs in with.",
     "inheritHint": "Signs in as {{username}} with the identity {{name}} from the group. Changing the identity changes every host that uses it.",
     "agentForward": "Forward the SSH agent",
-    "agentForwardHint": "Lets this server use your agent's keys to reach other servers. Turn it on only for servers you trust: anyone with root on it can use your keys while you are connected."
+    "agentForwardHint": "Lets this server use your agent's keys to reach other servers. Turn it on only for servers you trust: anyone with root on it can use your keys while you are connected.",
+    "jumpHost": "Jump host",
+    "jumpHostHint": "Connect to this server through another saved host. That host can have its own jump host too.",
+    "jumpNone": "None (connect directly)",
+    "jumpInherit": "From the group: {{name}}",
+    "jumpDirect": "None (connect directly, not through the group's jump host)",
+    "proxy": "Proxy",
+    "proxyType": "Proxy type",
+    "proxyNone": "No proxy",
+    "proxyWithJump": "With a jump host, the jump host's own proxy is used for the first connection. Set the proxy on the jump host.",
+    "proxyHost": "Proxy address",
+    "proxyPort": "Port",
+    "proxyUser": "User name",
+    "proxyPassword": "Password",
+    "proxyForgetPassword": "Remove the saved password",
+    "optional": "Optional",
+    "startupCommand": "Startup command",
+    "startupHint": "Typed into the shell right after you sign in, like cd /var/www. Not typed again when a sticky session resumes.",
+    "startupInvalid": "Use one line of at most 1000 characters.",
+    "sticky": "Sticky session (tmux)",
+    "stickyHint": "Your shell runs inside tmux on the server, so after a dropped connection you continue right where you were. Kelidar checks for tmux and then runs:"
   },
   "prompts": {
     "hostKeyTitle": "Trust this server?",
@@ -229,9 +256,18 @@
       "authenticating": "signing in",
       "ready": "connected",
       "closed": "disconnected",
-      "error": "connection problem"
+      "error": "connection problem",
+      "reconnecting": "reconnecting"
     },
-    "editHost": "Edit host"
+    "editHost": "Edit host",
+    "connectionLost": "Connection to {{target}} lost",
+    "reconnectingIn_one": "Reconnecting in {{count}} second (attempt {{attempt}})…",
+    "reconnectingIn_other": "Reconnecting in {{count}} seconds (attempt {{attempt}})…",
+    "reconnectingNow": "Reconnecting (attempt {{attempt}})…",
+    "reconnectNow": "Reconnect now",
+    "tmuxMissing": "This host uses a sticky session, but tmux is not installed on the server, so a normal shell opened. Work in it is lost if the connection drops.",
+    "tmuxInstall": "To install tmux, run one of these on the server (Debian or Ubuntu, Fedora or RHEL, Alpine), then connect again:",
+    "onJumpHost": "On the jump host {{name}}: {{message}}"
   },
   "quickConnect": {
     "hint": "For example root@server.example.com:2222, or paste a whole ssh command with -p and -i.",
@@ -278,7 +314,9 @@
     "identity": "Identity",
     "identityHint": "Hosts in this group that set neither a user name nor an identity sign in with this one.",
     "identityNone": "None",
-    "identityInherit": "From the parent group: {{name}}"
+    "identityInherit": "From the parent group: {{name}}",
+    "jumpHostHint": "Hosts in this group connect through this host unless they choose another one or none.",
+    "jumpInherit": "From the parent group: {{name}}"
   },
   "environments": {
     "production": "Production",
@@ -335,7 +373,8 @@
     "keychain": "Go to Keychain",
     "newIdentity": "New identity",
     "generateKey": "Generate a key",
-    "importKey": "Import a key file"
+    "importKey": "Import a key file",
+    "duplicateTab": "New tab on the same connection"
   },
   "shortcuts": {
     "title": "Keyboard shortcuts",

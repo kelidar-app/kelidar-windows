@@ -20,6 +20,7 @@ import {
   knownHostForgetSchema,
   promptAnswerSchema,
   sessionAckSchema,
+  sessionDuplicateSchema,
   sessionIdSchema,
   sessionInputSchema,
   sessionOpenRequestSchema,
@@ -168,6 +169,16 @@ export const ipcContract = {
     response: z.undefined(),
   },
   'session:close': {
+    request: sessionIdSchema,
+    response: z.undefined(),
+  },
+  /** A new tab on the same connection: a new channel, no new sign-in. */
+  'session:duplicate': {
+    request: sessionDuplicateSchema,
+    response: sessionOpenResponseSchema,
+  },
+  /** While reconnecting: try now instead of waiting for the next attempt. */
+  'session:reconnectNow': {
     request: sessionIdSchema,
     response: z.undefined(),
   },

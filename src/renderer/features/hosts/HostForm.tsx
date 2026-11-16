@@ -29,6 +29,13 @@ import { useHostFormStore, useHostsStore, type HostFormState } from '@renderer/s
 import { useKeychainDialogStore, useKeychainStore } from '@renderer/stores/keychain'
 import { useTabsStore } from '@renderer/stores/tabs'
 import { ColorPicker } from './ColorPicker'
+import { ConnectionFields } from './ConnectionFields'
+import {
+  connectionRequest,
+  hasConnectionOptions,
+  initialConnection,
+  type ConnectionErrors,
+} from './connection-draft'
 import { GroupOptions } from './GroupForm'
 import { canUpgradeToKey } from './host-keys'
 
@@ -65,6 +72,7 @@ function HostForm({
   const { t } = useTranslation()
   const save = useHostsStore((state) => state.save)
   const groups = useHostsStore((state) => state.groups)
+  const hosts = useHostsStore((state) => state.hosts)
   const identities = useKeychainStore((state) => state.identities)
   const loadKeychain = useKeychainStore((state) => state.load)
   const openKeychainDialog = useKeychainDialogStore((state) => state.open)
@@ -119,13 +127,16 @@ function HostForm({
   const [tags, setTags] = useState(editing?.tags.join(' ') ?? '')
   const [color, setColor] = useState<ColorId | undefined>(editing?.color)
   const [agentForward, setAgentForward] = useState(editing?.agentForward ?? false)
+  const [connection, setConnection] = useState(() => initialConnection(editing))
+  const [connectionErrors, setConnectionErrors] = useState<ConnectionErrors>({})
   const [showMore, setShowMore] = useState(
     initialPort !== undefined ||
       (editing?.groupId ?? prefill?.groupId) !== undefined ||
       editing?.ownEnvironment !== undefined ||
       (editing?.tags.length ?? 0) > 0 ||
       editing?.color !== undefined ||
-      editing?.agentForward === true,
+      editing?.agentForward === true ||
+      hasConnectionOptions(editing),
   )
   const [errors, setErrors] = useState<
     {
@@ -191,8 +202,18 @@ function HostForm({
       next.tags = t('hostForm.tagsInvalid', { max: MAX_TAGS })
       setShowMore(true)
     }
+    const connectionResult = connectionRequest(connection, editing)
+    setConnectionErrors(connectionResult.ok ? {} : connectionResult.errors)
+    if (!connectionResult.ok) setShowMore(true)
     setErrors(next)
-    if (Object.keys(next).length > 0 || cleanAddress === null || !parsedTags.success) return
+    if (
+      Object.keys(next).length > 0 ||
+      cleanAddress === null ||
+      !parsedTags.success ||
+      !connectionResult.ok
+    ) {
+      return
+    }
     const auth = buildAuth()
     if (auth === null) return
 
@@ -207,6 +228,7 @@ function HostForm({
       ...(color === undefined ? {} : { color }),
       ...(environment === '' ? {} : { environment }),
       ...(agentForward ? { agentForward: true } : {}),
+      ...connectionResult.fields,
       ...(needsUsername ? { username: username.trim() } : {}),
       auth,
     })
@@ -455,6 +477,14 @@ function HostForm({
               />
             )}
           </Field>
+          <ConnectionFields
+            draft={connection}
+            onChange={setConnection}
+            errors={connectionErrors}
+            hosts={hosts}
+            editing={editing}
+            groupJumpName={hosts.find((host) => host.id === inherited.jumpHostId.value)?.name}
+          />
           <Field label={t('hostForm.environment')} hint={t('hostForm.environmentHint')}>
             {({ id, describedBy }) => (
               <Select

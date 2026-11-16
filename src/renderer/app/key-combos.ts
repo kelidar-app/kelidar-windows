@@ -64,6 +64,7 @@ export const COMMAND_IDS = [
   'previousTab',
   'renameTab',
   'paste',
+  'duplicateTab',
   'newIdentity',
   'generateKey',
   'importKey',
@@ -100,4 +101,5 @@ export const COMMAND_KEYS: Record<CommandId, readonly KeyCombo[]> = {
   previousTab: [{ code: 'Tab', shift: true }],
   renameTab: [{ code: 'KeyR', shift: true }],
   paste: [{ code: 'KeyV', shift: true }],
+  duplicateTab: [{ code: 'KeyT', shift: true }],
 }

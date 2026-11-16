@@ -95,12 +95,14 @@ test('Phase 1 smoke: vault self-test, save a host, connect, three sessions, no s
     await expect(page.locator('[data-tab-state="ready"]')).toHaveCount(2)
     await expect.poll(() => server?.openShells()).toBe(2)
 
-    // The server goes away: every tab shows it.
+    // The connections drop: every tab shows it, then reconnects by itself (Phase 2).
+    const shellsBefore = server.openShells()
     for (const connection of server.connections) connection.end()
-    await expect(page.locator('[data-tab-state="error"]')).toHaveCount(2)
-    await expect(page.locator('section:not([hidden]) [data-session-banner="error"]')).toContainText(
-      'The connection was lost',
-    )
+    await expect(
+      page.locator('section:not([hidden]) [data-session-banner="reconnecting"]'),
+    ).toContainText('lost')
+    await expect(page.locator('[data-tab-state="ready"]')).toHaveCount(2, { timeout: 15_000 })
+    await expect.poll(() => server?.openShells()).toBe(shellsBefore)
 
     // No secret in the page or its storage, none on disk in plain text.
     const pageText = await page.evaluate(

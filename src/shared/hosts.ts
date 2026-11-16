@@ -6,8 +6,10 @@ import {
   environmentSchema,
   idSchema,
   keyTypeSchema,
+  MAX_STARTUP_COMMAND,
   MAX_TAGS,
   portSchema,
+  proxyTypeSchema,
   tagSchema,
   timestampSchema,
 } from './records'
@@ -42,6 +44,27 @@ export const hostViewSchema = z.object({
     .object({ id: idSchema, name: z.string(), from: z.enum(['host', 'group']) })
     .optional(),
   agentForward: z.boolean(),
+  /** The jump host the host connects through: its own, or its group's. */
+  jump: z
+    .object({ hostId: idSchema, name: z.string(), from: z.enum(['host', 'group']) })
+    .optional(),
+  /** What the host itself says: inherit from the group, connect directly, or a host. */
+  ownJump: z.union([
+    z.object({ type: z.literal('inherit') }),
+    z.object({ type: z.literal('none') }),
+    z.object({ type: z.literal('host'), hostId: idSchema }),
+  ]),
+  proxy: z
+    .object({
+      type: proxyTypeSchema,
+      host: z.string(),
+      port: portSchema,
+      username: z.string().optional(),
+      hasPassword: z.boolean(),
+    })
+    .optional(),
+  startupCommand: z.string().optional(),
+  stickySession: z.boolean(),
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
   lastConnectedAt: timestampSchema.optional(),
@@ -117,6 +140,34 @@ export const hostSaveRequestSchema = z.strictObject({
   color: colorSchema.optional(),
   environment: environmentSchema.optional(),
   agentForward: z.boolean().optional(),
+  /** Missing: inherit the group's jump host. */
+  jump: z
+    .discriminatedUnion('type', [
+      z.strictObject({ type: z.literal('inherit') }),
+      z.strictObject({ type: z.literal('none') }),
+      z.strictObject({ type: z.literal('host'), hostId: idSchema }),
+    ])
+    .optional(),
+  /**
+   * Missing: no proxy. A password value saves it; '' removes it; undefined
+   * keeps the saved one when the proxy stays the same.
+   */
+  proxy: z
+    .strictObject({
+      type: proxyTypeSchema,
+      host: addressSchema,
+      port: portSchema,
+      username: z.string().trim().min(1).max(255).optional(),
+      password: z.string().max(4096).optional(),
+    })
+    .optional(),
+  startupCommand: z
+    .string()
+    .trim()
+    .max(MAX_STARTUP_COMMAND)
+    .regex(/^[^\r\n]*$/)
+    .optional(),
+  stickySession: z.boolean().optional(),
   username: usernameSchema.optional(),
   auth: z.discriminatedUnion('type', [
     ...authRequestSchema.options,

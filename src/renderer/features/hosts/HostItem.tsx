@@ -241,6 +241,11 @@ export function HostItem({ host, layout }: { host: HostView; layout: HostLayout 
         >
           {target}
         </span>
+        {host.jump !== undefined && (
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {t('hosts.via', { name: host.jump.name })}
+          </span>
+        )}
         {host.environment !== undefined && <EnvironmentBadge environment={host.environment} />}
         <div className="hidden max-w-[30%] lg:block">
           <TagChips tags={host.tags} />
@@ -269,6 +274,11 @@ export function HostItem({ host, layout }: { host: HostView; layout: HostLayout 
           <span dir="ltr" className="truncate text-start font-mono text-xs text-muted-foreground">
             {target}
           </span>
+          {host.jump !== undefined && (
+            <span className="truncate text-xs text-muted-foreground">
+              {t('hosts.via', { name: host.jump.name })}
+            </span>
+          )}
         </div>
         <SignInIcon host={host} />
       </div>

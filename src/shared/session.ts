@@ -9,6 +9,8 @@ export const SESSION_STATES = [
   'verifying-host-key',
   'authenticating',
   'ready',
+  /** The connection dropped; Kelidar tries again with a growing delay. */
+  'reconnecting',
   'closed',
   'error',
 ] as const
@@ -63,6 +65,12 @@ export const sessionAckSchema = z.strictObject({
 
 export const sessionIdSchema = z.strictObject({ sessionId: idSchema })
 
+/** A new tab on the connection of an open one: a new channel, no new sign-in. */
+export const sessionDuplicateSchema = z.strictObject({
+  sessionId: idSchema,
+  ...terminalSizeSchema.shape,
+})
+
 export const hostKeyInfoSchema = z.object({
   host: z.string(),
   port: portSchema,
@@ -77,6 +85,12 @@ export interface SessionStateEvent {
   state: SessionState
   error?: ErrorCode
   hostKey?: HostKeyInfo
+  /** The jump host the error happened on (its name). */
+  via?: string
+  /** While reconnecting: the attempt number and when the next try starts (epoch ms). */
+  reconnect?: { attempt: number; retryAt: number }
+  /** When ready, for a sticky session: tmux started, resumed, or missing on the server. */
+  sticky?: 'started' | 'resumed' | 'unavailable'
 }
 
 /** session:data (main to renderer): a batch of terminal output. */

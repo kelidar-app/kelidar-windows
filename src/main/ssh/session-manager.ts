@@ -1,7 +1,14 @@
 import { randomUUID } from 'node:crypto'
+import type { Duplex } from 'node:stream'
 import { Client, type BaseAgent, type ClientChannel, type ConnectConfig } from 'ssh2'
 import type { ErrorCode } from '@shared/errors'
-import type { HostKeyInfo, SessionOpenResponse, SessionState, SessionTarget } from '@shared/session'
+import type {
+  HostKeyInfo,
+  SessionOpenResponse,
+  SessionState,
+  SessionStateEvent,
+  SessionTarget,
+} from '@shared/session'
 import { AppError } from '../ipc/app-error'
 import type { Agents } from '../keychain/agents'
 import {
@@ -15,14 +22,27 @@ import type { EventSink } from './event-sink'
 import { describeHostKey, type KnownHosts } from './host-keys'
 import { inspectPrivateKey } from './keys'
 import type { PromptBroker } from './prompts'
+import { openProxySocket, type ProxyConfig } from './proxy'
 
-/** Everything needed to connect. Built in main from the vault or a Quick Connect string. */
-export interface ConnectTarget extends SessionTarget {
+/** One server on the way: a jump host or the target itself. */
+export interface HopTarget extends SessionTarget {
   hostId?: string
   title: string
   credential: Credential
+}
+
+/** Everything needed to connect. Built in main from the vault or a Quick Connect string. */
+export interface ConnectTarget extends HopTarget {
   /** Forward the local agent to the server (when one runs). */
   agentForward?: boolean
+  /** Jump hosts in order: the first is reached from this computer. */
+  via?: HopTarget[]
+  /** Proxy for the connection from this computer (to the first jump host, or the target). */
+  proxy?: ProxyConfig
+  /** Typed into each new shell. */
+  startupCommand?: string
+  /** Run the shell inside tmux, so a dropped connection loses nothing. */
+  stickySession?: boolean
 }
 
 /** What runCommand returns. The output is capped at MAX_COMMAND_OUTPUT bytes. */
@@ -45,6 +65,8 @@ export interface SessionTiming {
   highWaterBytes: number
   /** ...and read again once the renderer is back under this. */
   lowWaterBytes: number
+  /** Waits between reconnect attempts; the last one repeats. */
+  reconnectDelaysMs: readonly number[]
 }
 
 export const DEFAULT_TIMING: SessionTiming = {
@@ -55,9 +77,24 @@ export const DEFAULT_TIMING: SessionTiming = {
   maxBatchBytes: 256 * 1024,
   highWaterBytes: 1024 * 1024,
   lowWaterBytes: 256 * 1024,
+  reconnectDelaysMs: [1000, 2000, 5000, 10_000, 30_000],
 }
 
 export const MAX_SESSIONS_PER_WINDOW = 64
+
+/** Failures worth another try: the network or the server is away, not a refusal. */
+const RETRYABLE: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
+  'SSH_HOST_NOT_FOUND',
+  'SSH_CONNECTION_REFUSED',
+  'SSH_NETWORK_UNREACHABLE',
+  'SSH_TIMEOUT',
+  'SSH_CONNECTION_CLOSED_BY_SERVER',
+  'SSH_CONNECTION_LOST',
+  'SSH_FAILED',
+  'PROXY_UNREACHABLE',
+  'PROXY_REFUSED',
+  'JUMP_FORWARD_FAILED',
+])
 
 export interface SessionManagerOptions {
   resolveHost: (hostId: string) => Promise<ConnectTarget>
@@ -82,34 +119,96 @@ export type SessionOpenRequest =
 
 const FINAL_STATES: ReadonlySet<SessionState> = new Set(['closed', 'error'])
 
+/** One server on a link, with what was learned while connecting to it. */
+class Hop {
+  credential: Credential
+  /** The credential being tried; becomes `used` once signed in. */
+  trying: UsedCredential | null = null
+  used: UsedCredential | undefined
+  hostKey: HostKeyInfo | undefined
+  hostKeyProblem: 'changed' | 'rejected' | undefined
+  forcedError: ErrorCode | undefined
+
+  constructor(
+    readonly target: HopTarget,
+    readonly last: boolean,
+  ) {
+    this.credential = target.credential
+  }
+}
+
+/** Why a link failed, and on which server. */
+class LinkFailure extends Error {
+  constructor(
+    readonly code: ErrorCode,
+    readonly hop: Hop | undefined,
+    readonly cancelled = false,
+  ) {
+    super(code)
+  }
+}
+
+/**
+ * One SSH connection (through its proxy and jump hosts) shared by one or more
+ * sessions. It reconnects by itself when a ready connection drops.
+ */
+class Link {
+  readonly id = randomUUID()
+  state: 'connecting' | 'ready' | 'reconnecting' | 'closed' = 'connecting'
+  readonly sessions = new Set<Session>()
+  readonly hops: Hop[]
+  clients: Client[] = []
+  sockets: Duplex[] = []
+  client: Client | undefined
+  agent: BaseAgent | undefined
+  forwardAgent = false
+  prepared = false
+  wasReady = false
+  attempt = 0
+  retryTimer: NodeJS.Timeout | undefined
+  cancelled = false
+
+  constructor(
+    readonly owner: EventSink,
+    readonly target: ConnectTarget,
+    /** runCommand: try only the given credential on the target, and never reconnect. */
+    readonly strict: boolean,
+  ) {
+    const via = target.via ?? []
+    this.hops = [...via.map((hop) => new Hop(hop, false)), new Hop(target, true)]
+  }
+
+  get final(): Hop {
+    const hop = this.hops.at(-1)
+    if (hop === undefined) throw new Error('A link always has its target')
+    return hop
+  }
+
+  /** Reads the state anew: it may change while an await is pending (a tab closed). */
+  is(state: Link['state']): boolean {
+    return this.state === state
+  }
+
+  liveSessions(): Session[] {
+    return [...this.sessions].filter((session) => !FINAL_STATES.has(session.state))
+  }
+}
+
 class Session {
   state: SessionState = 'connecting'
-  client: Client | undefined
   stream: ClientChannel | undefined
   pending: Buffer[] = []
   pendingBytes = 0
   timer: NodeJS.Timeout | undefined
   unacked = 0
   paused = false
-  wasReady = false
-  shellClosed = false
   userClosed = false
-  cancelled = false
-  hostKeyProblem: 'changed' | 'rejected' | undefined
-  hostKey: HostKeyInfo | undefined
-  forcedError: ErrorCode | undefined
-  /** The credential that was being tried; becomes `used` once the shell opens. */
-  trying: UsedCredential | null = null
-  used: UsedCredential | undefined
-  /** Starts as the target's credential; gains the passphrase once unlocked. */
-  credential: Credential
-  agent: BaseAgent | undefined
-  forwardAgent = false
+  /** The server reported the shell's exit: a closed channel is the end, not a drop. */
+  shellExited = false
   /** runCommand: no terminal, no events to the renderer (prompts still go to the window). */
   exec:
     | {
         command: string
-        strict: boolean
         output: Buffer[]
         bytes: number
         settled: boolean
@@ -121,12 +220,12 @@ class Session {
   constructor(
     readonly id: string,
     readonly owner: EventSink,
-    readonly target: ConnectTarget,
+    readonly link: Link,
     public cols: number,
     public rows: number,
-  ) {
-    this.credential = target.credential
-  }
+    /** tmux session name for a sticky session. */
+    readonly stickyName: string | undefined,
+  ) {}
 }
 
 /**
@@ -142,16 +241,72 @@ export class SessionManager {
   }
 
   async open(owner: EventSink, request: SessionOpenRequest): Promise<SessionOpenResponse> {
-    const owned = [...this.sessions.values()].filter((s) => s.owner.id === owner.id).length
-    if (owned >= MAX_SESSIONS_PER_WINDOW) throw new AppError('SESSION_LIMIT')
-
+    this.checkLimit(owner)
     const target = await this.resolve(request)
-    const session = new Session(randomUUID(), owner, target, request.cols, request.rows)
-    this.sessions.set(session.id, session)
+    const link = new Link(owner, target, false)
+    const session = this.addSession(owner, link, request.cols, request.rows)
     // Answer the renderer first, then start; events for this id may follow right away.
     setImmediate(() => {
-      this.connect(session)
+      this.sendState(session, { state: 'connecting' })
+      void this.startLink(link)
     })
+    return this.describe(session)
+  }
+
+  /** A new tab on the connection of an open one: a new channel, no new sign-in. */
+  duplicate(owner: EventSink, sessionId: string, cols: number, rows: number): SessionOpenResponse {
+    const source = this.owned(owner, sessionId)
+    const link = source.link
+    if (link.state === 'closed' || link.strict) throw new AppError('SESSION_NOT_FOUND')
+    this.checkLimit(owner)
+    const session = this.addSession(owner, link, cols, rows)
+    setImmediate(() => {
+      if (link.state === 'ready' && link.client !== undefined) {
+        this.sendState(session, { state: 'connecting' })
+        this.openChannel(session, link.client)
+      } else if (link.state === 'reconnecting') {
+        session.state = 'reconnecting'
+        this.sendState(session, {
+          state: 'reconnecting',
+          reconnect: { attempt: link.attempt, retryAt: Date.now() },
+        })
+      } else {
+        this.sendState(session, { state: 'connecting' })
+      }
+    })
+    return this.describe(session)
+  }
+
+  private checkLimit(owner: EventSink): void {
+    const owned = [...this.sessions.values()].filter((s) => s.owner.id === owner.id).length
+    if (owned >= MAX_SESSIONS_PER_WINDOW) throw new AppError('SESSION_LIMIT')
+  }
+
+  private addSession(owner: EventSink, link: Link, cols: number, rows: number): Session {
+    const session = new Session(randomUUID(), owner, link, cols, rows, this.stickyName(link))
+    link.sessions.add(session)
+    this.sessions.set(session.id, session)
+    return session
+  }
+
+  /** kelidar-<host id prefix>, then -2, -3… for more tabs on the same host. */
+  private stickyName(link: Link): string | undefined {
+    const hostId = link.target.hostId
+    if (link.target.stickySession !== true || hostId === undefined || link.strict) return undefined
+    const base = `kelidar-${hostId.replaceAll('-', '').slice(0, 8)}`
+    const taken = new Set(
+      [...this.sessions.values()]
+        .filter((s) => s.link.target.hostId === hostId && !FINAL_STATES.has(s.state))
+        .map((s) => s.stickyName),
+    )
+    for (let n = 1; ; n++) {
+      const name = n === 1 ? base : `${base}-${String(n)}`
+      if (!taken.has(name)) return name
+    }
+  }
+
+  private describe(session: Session): SessionOpenResponse {
+    const target = session.link.target
     return {
       sessionId: session.id,
       title: target.title,
@@ -191,13 +346,20 @@ export class SessionManager {
     }
   }
 
-  /** Ends the connection and forgets the session (the tab was closed). */
+  /** While reconnecting: try now instead of waiting. */
+  reconnectNow(owner: EventSink, sessionId: string): void {
+    const link = this.owned(owner, sessionId).link
+    if (link.state !== 'reconnecting') return
+    clearTimeout(link.retryTimer)
+    void this.reconnect(link)
+  }
+
+  /** Ends the session (the tab was closed); the connection ends with its last session. */
   close(owner: EventSink, sessionId: string): void {
     const session = this.sessions.get(sessionId)
     if (session?.owner.id !== owner.id) return
     session.userClosed = true
-    this.finish(session, 'closed')
-    this.sessions.delete(sessionId)
+    this.finishSession(session, 'closed')
   }
 
   closeAllFor(owner: EventSink): void {
@@ -212,11 +374,11 @@ export class SessionManager {
 
   /** The sign-in that worked, for "Save host" after Quick Connect. Main only. */
   usedCredential(owner: EventSink, sessionId: string): UsedCredential | undefined {
-    return this.owned(owner, sessionId).used
+    return this.owned(owner, sessionId).link.final.used
   }
 
   target(owner: EventSink, sessionId: string): ConnectTarget {
-    return this.owned(owner, sessionId).target
+    return this.owned(owner, sessionId).link.target
   }
 
   private owned(owner: EventSink, sessionId: string): Session {
@@ -225,115 +387,112 @@ export class SessionManager {
     return session
   }
 
-  private setState(session: Session, state: SessionState, error?: ErrorCode): void {
-    if (FINAL_STATES.has(session.state) || session.state === state) return
-    session.state = state
+  // --- State ---------------------------------------------------------------
+
+  private sendState(session: Session, event: Omit<SessionStateEvent, 'sessionId'>): void {
     this.options.log?.(
-      `session ${session.id.slice(0, 8)} ${state}${error === undefined ? '' : ` ${error}`}`,
+      `session ${session.id.slice(0, 8)} ${event.state}${event.error === undefined ? '' : ` ${event.error}`}`,
     )
     if (session.owner.isDestroyed() || session.exec !== undefined) return
-    session.owner.send('session:state', {
-      sessionId: session.id,
-      state,
-      ...(error === undefined ? {} : { error }),
-      ...((error === 'SSH_HOST_KEY_CHANGED' || error === 'SSH_HOST_KEY_REJECTED') &&
-      session.hostKey !== undefined
-        ? { hostKey: session.hostKey }
-        : {}),
-    })
+    session.owner.send('session:state', { sessionId: session.id, ...event })
   }
 
-  /** Moves to a final state once and releases everything. */
-  private finish(session: Session, state: 'closed' | 'error', error?: ErrorCode): void {
+  private setState(
+    session: Session,
+    state: SessionState,
+    extra: Omit<SessionStateEvent, 'sessionId' | 'state'> = {},
+  ): void {
     if (FINAL_STATES.has(session.state)) return
-    this.flush(session)
-    if (state === 'error') this.setState(session, 'error', error ?? 'SSH_FAILED')
-    else this.setState(session, 'closed')
-    if (session.exec !== undefined && !session.exec.settled) {
-      session.exec.settled = true
-      session.exec.reject(
-        new AppError(state === 'error' ? (error ?? 'SSH_FAILED') : 'OPERATION_CANCELLED'),
-      )
+    if (session.state === state && state !== 'reconnecting') return
+    session.state = state
+    this.sendState(session, { state, ...extra })
+  }
+
+  /** Connection phases for the target, shown on every session of a first connect. */
+  private setPhase(link: Link, state: 'verifying-host-key' | 'authenticating'): void {
+    if (link.wasReady) return
+    for (const session of link.liveSessions()) this.setState(session, state)
+  }
+
+  /** Moves a session to a final state once, and ends its link when it was the last. */
+  private finishSession(
+    session: Session,
+    state: 'closed' | 'error',
+    error?: ErrorCode,
+    extra: Omit<SessionStateEvent, 'sessionId' | 'state' | 'error'> = {},
+  ): void {
+    if (!FINAL_STATES.has(session.state)) {
+      this.flush(session)
+      if (state === 'error')
+        this.setState(session, 'error', { error: error ?? 'SSH_FAILED', ...extra })
+      else this.setState(session, 'closed')
+      if (session.exec !== undefined && !session.exec.settled) {
+        session.exec.settled = true
+        session.exec.reject(
+          new AppError(state === 'error' ? (error ?? 'SSH_FAILED') : 'OPERATION_CANCELLED'),
+        )
+      }
     }
     clearTimeout(session.timer)
     session.timer = undefined
     session.pending = []
     session.pendingBytes = 0
-    this.options.prompts.cancelSession(session.id)
-    const client = session.client
+    const stream = session.stream
     session.stream = undefined
-    if (client !== undefined) {
-      client.end()
-      // If the server never answers the disconnect, drop the socket.
-      setTimeout(() => {
-        client.destroy()
-      }, 2000).unref()
+    stream?.close()
+    this.sessions.delete(session.id)
+    const link = session.link
+    link.sessions.delete(session)
+    if (link.sessions.size === 0) this.endLink(link)
+  }
+
+  // --- Connecting ----------------------------------------------------------
+
+  private async startLink(link: Link): Promise<void> {
+    try {
+      await this.prepare(link)
+      const client = await this.establish(link)
+      this.onLinkReady(link, client)
+    } catch (error) {
+      this.onLinkFailed(link, error)
     }
   }
 
-  private fail(session: Session, error: unknown): void {
-    if (session.userClosed) return
-    if (session.cancelled) {
-      this.finish(session, 'closed')
-      return
+  /** Agents and key passphrases, once per link. */
+  private async prepare(link: Link): Promise<void> {
+    if (link.prepared) return
+    if (link.hops.some((hop) => hop.credential.type === 'agent')) {
+      if (this.options.agents === undefined) throw new LinkFailure('AGENT_UNAVAILABLE', undefined)
+      link.agent = await this.options.agents.forSignIn()
     }
-    const code =
-      session.forcedError ??
-      mapConnectionError(error, {
-        ...(session.hostKeyProblem === undefined ? {} : { hostKey: session.hostKeyProblem }),
-        wasReady: session.wasReady,
-      })
-    this.finish(session, 'error', code)
-  }
-
-  private connect(session: Session): void {
-    if (FINAL_STATES.has(session.state)) return
-    this.options.log?.(`session ${session.id.slice(0, 8)} connecting`)
-    if (!session.owner.isDestroyed() && session.exec === undefined) {
-      session.owner.send('session:state', { sessionId: session.id, state: 'connecting' })
+    if (link.target.agentForward === true && !link.strict) {
+      link.agent ??= await this.options.agents?.forForwarding()
+      link.forwardAgent = link.agent !== undefined
     }
-    void (async () => {
-      try {
-        if (session.credential.type === 'agent') {
-          if (this.options.agents === undefined) throw new AppError('AGENT_UNAVAILABLE')
-          session.agent = await this.options.agents.forSignIn()
-        }
-        if (session.target.agentForward === true && session.exec === undefined) {
-          session.agent ??= await this.options.agents?.forForwarding()
-          session.forwardAgent = session.agent !== undefined
-        }
-      } catch (error) {
-        this.finish(session, 'error', error instanceof AppError ? error.code : 'SSH_FAILED')
-        return
-      }
-      if (FINAL_STATES.has(session.state)) return
-      const credential = session.credential
+    for (const hop of link.hops) {
+      const credential = hop.credential
       if (credential.type === 'key' && credential.needsPassphrase === true) {
-        const unlocked = await this.unlockKey(session, credential)
-        if (unlocked === null) return
-        session.credential = unlocked
+        hop.credential = await this.unlockKey(link, hop, credential)
       }
-      this.connectClient(session)
-    })()
+    }
+    link.prepared = true
   }
 
   /** Asks for a key's passphrase (three tries) and checks it locally. */
   private async unlockKey(
-    session: Session,
+    link: Link,
+    hop: Hop,
     credential: Extract<Credential, { type: 'key' }>,
-  ): Promise<Credential | null> {
+  ): Promise<Credential> {
     for (let attempt = 0; attempt < MAX_PASSWORD_ATTEMPTS; attempt++) {
-      const answer = await this.options.prompts.ask(session.owner, {
-        sessionId: session.id,
+      const answer = await this.options.prompts.ask(link.owner, {
+        sessionId: link.id,
         kind: 'passphrase',
         keyName: credential.keyName,
         attempt,
       })
-      if (FINAL_STATES.has(session.state)) return null
-      if (answer?.kind !== 'passphrase' || answer.value === null) {
-        session.cancelled = true
-        this.finish(session, 'closed')
-        return null
+      if (link.state === 'closed' || answer?.kind !== 'passphrase' || answer.value === null) {
+        throw new LinkFailure('OPERATION_CANCELLED', hop, true)
       }
       try {
         inspectPrivateKey(credential.privateKey, answer.value)
@@ -347,105 +506,156 @@ export class SessionManager {
         // Wrong passphrase: ask again.
       }
     }
-    this.finish(session, 'error', 'KEY_PASSPHRASE_WRONG')
-    return null
+    throw new LinkFailure('KEY_PASSPHRASE_WRONG', hop)
   }
 
-  private connectClient(session: Session): void {
-    if (FINAL_STATES.has(session.state)) return
-    const { target, owner } = session
-
-    const client = this.options.createClient?.() ?? new Client()
-    session.client = client
-
-    client.on('ready', () => {
-      if (session.exec === undefined) this.openShell(session, client)
-      else this.runExec(session, client)
-    })
-    client.on('error', (error) => {
-      this.fail(session, error)
-    })
-    client.on('close', () => {
-      if (FINAL_STATES.has(session.state)) return
-      if (session.shellClosed || session.cancelled) this.finish(session, 'closed')
-      else
-        this.finish(
-          session,
-          'error',
-          session.wasReady ? 'SSH_CONNECTION_LOST' : 'SSH_CONNECTION_CLOSED_BY_SERVER',
+  /** Proxy, then each jump host, then the target. Resolves with the target's client. */
+  private async establish(link: Link): Promise<Client> {
+    this.endClients(link)
+    let sock: Duplex | undefined
+    const first = link.hops[0] ?? link.final
+    if (link.target.proxy !== undefined) {
+      try {
+        sock = await openProxySocket(
+          link.target.proxy,
+          first.target.address,
+          first.target.port,
+          this.timing.readyTimeoutMs,
         )
-    })
-
-    const config: ConnectConfig = {
-      host: target.address,
-      port: target.port,
-      username: target.username,
-      readyTimeout: this.timing.readyTimeoutMs,
-      keepaliveInterval: this.timing.keepaliveIntervalMs,
-      keepaliveCountMax: this.timing.keepaliveCountMax,
-      tryKeyboard: true,
-      ...(session.agent === undefined ? {} : { agent: session.agent }),
-      ...(session.forwardAgent ? { agentForward: true } : {}),
-      hostVerifier: (key: Buffer, verify: (valid: boolean) => void) => {
-        this.verifyHostKey(session, key, verify)
-      },
-      authHandler: createAuthHandler(
-        target.username,
-        session.credential,
-        {
-          askPassword: async (attempt) => {
-            const answer = await this.options.prompts.ask(owner, {
-              sessionId: session.id,
-              kind: 'password',
-              username: target.username,
-              host: target.address,
-              attempt,
-            })
-            return answer?.kind === 'password' ? answer.value : null
-          },
-          askKeyboard: async (name, instructions, prompts) => {
-            const answer = await this.options.prompts.ask(owner, {
-              sessionId: session.id,
-              kind: 'keyboardInteractive',
-              host: target.address,
-              name,
-              instructions,
-              prompts,
-            })
-            return answer?.kind === 'keyboardInteractive' ? answer.values : null
-          },
-          onCancelled: () => {
-            session.cancelled = true
-          },
-          onTry: (used) => {
-            session.trying = used
-          },
-        },
-        {
-          agent: session.agent,
-          strict: session.exec?.strict === true,
-        },
-      ),
+      } catch (error) {
+        throw new LinkFailure(
+          error instanceof AppError ? error.code : 'PROXY_REFUSED',
+          link.hops.length > 1 ? first : undefined,
+        )
+      }
+      link.sockets.push(sock)
     }
-
-    try {
-      client.connect(config)
-    } catch (error) {
-      this.fail(session, error)
+    let client: Client | undefined
+    for (const [index, hop] of link.hops.entries()) {
+      client = await this.connectHop(link, hop, sock)
+      link.clients.push(client)
+      const next = link.hops[index + 1]
+      if (next !== undefined) sock = await this.forward(client, hop, next)
     }
+    if (client === undefined) throw new LinkFailure('SSH_FAILED', undefined)
+    return client
   }
 
-  private verifyHostKey(session: Session, key: Buffer, verify: (valid: boolean) => void): void {
-    this.setState(session, 'verifying-host-key')
-    const info = describeHostKey(session.target.address, session.target.port, key)
-    session.hostKey = info
+  /** A TCP channel from a jump host to the next server, used as that server's socket. */
+  private forward(client: Client, hop: Hop, next: Hop): Promise<Duplex> {
+    return new Promise((resolve, reject) => {
+      client.forwardOut('127.0.0.1', 0, next.target.address, next.target.port, (error, stream) => {
+        if (error instanceof Error) reject(new LinkFailure('JUMP_FORWARD_FAILED', hop))
+        else resolve(stream)
+      })
+    })
+  }
+
+  private connectHop(link: Link, hop: Hop, sock: Duplex | undefined): Promise<Client> {
+    const client = this.options.createClient?.() ?? new Client()
+    const target = hop.target
+    return new Promise<Client>((resolve, reject) => {
+      let settled = false
+      const failure = (error: unknown): LinkFailure => {
+        if (link.cancelled || link.state === 'closed') {
+          return new LinkFailure('OPERATION_CANCELLED', hop, true)
+        }
+        const code =
+          hop.forcedError ??
+          mapConnectionError(error, {
+            ...(hop.hostKeyProblem === undefined ? {} : { hostKey: hop.hostKeyProblem }),
+            wasReady: false,
+          })
+        return new LinkFailure(code, hop)
+      }
+      client.on('ready', () => {
+        settled = true
+        hop.used = hop.trying ?? undefined
+        hop.trying = null
+        // Reconnects sign in the same way without asking again.
+        if (hop.used !== undefined) hop.credential = hop.used
+        resolve(client)
+      })
+      client.on('error', (error) => {
+        if (!settled) {
+          settled = true
+          reject(failure(error))
+        }
+      })
+      client.on('close', () => {
+        if (!settled) {
+          settled = true
+          reject(failure(new Error('Connection lost before handshake')))
+        }
+      })
+
+      const config: ConnectConfig = {
+        ...(sock === undefined ? { host: target.address, port: target.port } : { sock }),
+        username: target.username,
+        readyTimeout: this.timing.readyTimeoutMs,
+        keepaliveInterval: this.timing.keepaliveIntervalMs,
+        keepaliveCountMax: this.timing.keepaliveCountMax,
+        tryKeyboard: true,
+        ...(link.agent === undefined ? {} : { agent: link.agent }),
+        ...(hop.last && link.forwardAgent ? { agentForward: true } : {}),
+        hostVerifier: (key: Buffer, verify: (valid: boolean) => void) => {
+          this.verifyHostKey(link, hop, key, verify)
+        },
+        authHandler: createAuthHandler(
+          target.username,
+          hop.credential,
+          {
+            askPassword: async (attempt) => {
+              const answer = await this.options.prompts.ask(link.owner, {
+                sessionId: link.id,
+                kind: 'password',
+                username: target.username,
+                host: target.address,
+                attempt,
+              })
+              return answer?.kind === 'password' ? answer.value : null
+            },
+            askKeyboard: async (name, instructions, prompts) => {
+              const answer = await this.options.prompts.ask(link.owner, {
+                sessionId: link.id,
+                kind: 'keyboardInteractive',
+                host: target.address,
+                name,
+                instructions,
+                prompts,
+              })
+              return answer?.kind === 'keyboardInteractive' ? answer.values : null
+            },
+            onCancelled: () => {
+              link.cancelled = true
+            },
+            onTry: (used) => {
+              hop.trying = used
+            },
+          },
+          { agent: link.agent, strict: link.strict && hop.last },
+        ),
+      }
+      try {
+        client.connect(config)
+      } catch (error) {
+        settled = true
+        reject(failure(error))
+      }
+    })
+  }
+
+  private verifyHostKey(link: Link, hop: Hop, key: Buffer, verify: (valid: boolean) => void): void {
+    if (hop.last) this.setPhase(link, 'verifying-host-key')
+    const info = describeHostKey(hop.target.address, hop.target.port, key)
+    hop.hostKey = info
     const accept = (): void => {
-      if (FINAL_STATES.has(session.state)) {
+      if (link.state === 'closed') {
         verify(false)
         return
       }
       verify(true)
-      this.setState(session, 'authenticating')
+      if (hop.last) this.setPhase(link, 'authenticating')
     }
     void (async () => {
       try {
@@ -455,12 +665,12 @@ export class SessionManager {
           return
         }
         if (check.status === 'changed') {
-          session.hostKeyProblem = 'changed'
+          hop.hostKeyProblem = 'changed'
           verify(false)
           return
         }
-        const answer = await this.options.prompts.ask(session.owner, {
-          sessionId: session.id,
+        const answer = await this.options.prompts.ask(link.owner, {
+          sessionId: link.id,
           kind: 'hostKey',
           ...info,
         })
@@ -468,67 +678,241 @@ export class SessionManager {
           await this.options.knownHosts.trust(info)
           accept()
         } else {
-          session.hostKeyProblem = 'rejected'
-          if (answer === null) session.cancelled = true
+          hop.hostKeyProblem = 'rejected'
+          if (answer === null) link.cancelled = true
           verify(false)
         }
       } catch (error) {
-        session.forcedError = error instanceof AppError ? error.code : 'SSH_FAILED'
+        hop.forcedError = error instanceof AppError ? error.code : 'SSH_FAILED'
         verify(false)
       }
     })()
   }
 
-  private openShell(session: Session, client: Client): void {
+  private onLinkReady(link: Link, client: Client): void {
+    if (link.state === 'closed' || link.sessions.size === 0) {
+      this.endClients(link)
+      return
+    }
+    link.client = client
+    link.state = 'ready'
+    link.wasReady = true
+    link.attempt = 0
+    client.on('close', () => {
+      this.onLinkDropped(link, client)
+    })
+    for (const session of link.liveSessions()) this.openChannel(session, client)
+  }
+
+  private onLinkFailed(link: Link, error: unknown): void {
+    const failure =
+      error instanceof LinkFailure
+        ? error
+        : new LinkFailure(error instanceof AppError ? error.code : 'SSH_FAILED', undefined)
+    if (link.state === 'closed') return
+    if (failure.cancelled || link.cancelled) {
+      for (const session of link.liveSessions()) this.finishSession(session, 'closed')
+      this.endLink(link)
+      return
+    }
+    if (link.state === 'reconnecting' && RETRYABLE.has(failure.code)) {
+      this.scheduleReconnect(link)
+      return
+    }
+    const hop = failure.hop
+    const hostKeyError =
+      failure.code === 'SSH_HOST_KEY_CHANGED' || failure.code === 'SSH_HOST_KEY_REJECTED'
+    for (const session of link.liveSessions()) {
+      this.finishSession(session, 'error', failure.code, {
+        ...(hop !== undefined && !hop.last ? { via: hop.target.title } : {}),
+        ...(hostKeyError && hop?.hostKey !== undefined ? { hostKey: hop.hostKey } : {}),
+      })
+    }
+    this.endLink(link)
+  }
+
+  /** The ready connection is gone: reconnect, unless nobody needs it any more. */
+  private onLinkDropped(link: Link, client: Client): void {
+    if (link.client !== client || link.state !== 'ready') return
+    link.client = undefined
+    const live = link.liveSessions()
+    if (live.length === 0) {
+      this.endLink(link)
+      return
+    }
+    if (link.strict) {
+      for (const session of live) this.finishSession(session, 'error', 'SSH_CONNECTION_LOST')
+      return
+    }
+    for (const session of live) {
+      this.flush(session)
+      session.stream = undefined
+    }
+    this.scheduleReconnect(link)
+  }
+
+  private scheduleReconnect(link: Link): void {
+    this.endClients(link)
+    link.state = 'reconnecting'
+    link.attempt += 1
+    const delays = this.timing.reconnectDelaysMs
+    const delay = delays[Math.min(link.attempt - 1, delays.length - 1)] ?? 30_000
+    const retryAt = Date.now() + delay
+    for (const session of link.liveSessions()) {
+      this.setState(session, 'reconnecting', { reconnect: { attempt: link.attempt, retryAt } })
+    }
+    clearTimeout(link.retryTimer)
+    link.retryTimer = setTimeout(() => {
+      void this.reconnect(link)
+    }, delay)
+  }
+
+  private async reconnect(link: Link): Promise<void> {
+    if (link.state !== 'reconnecting') return
+    clearTimeout(link.retryTimer)
+    try {
+      const client = await this.establish(link)
+      if (!link.is('reconnecting')) {
+        client.end()
+        return
+      }
+      this.onLinkReady(link, client)
+    } catch (error) {
+      this.onLinkFailed(link, error)
+    }
+  }
+
+  private endLink(link: Link): void {
+    if (link.state === 'closed') return
+    link.state = 'closed'
+    clearTimeout(link.retryTimer)
+    this.options.prompts.cancelSession(link.id)
+    link.client = undefined
+    this.endClients(link)
+  }
+
+  private endClients(link: Link): void {
+    for (const client of link.clients.reverse()) {
+      client.end()
+      // If the server never answers the disconnect, drop the socket.
+      setTimeout(() => {
+        client.destroy()
+      }, 2000).unref()
+    }
+    for (const socket of link.sockets) socket.destroy()
+    link.clients = []
+    link.sockets = []
+  }
+
+  // --- Channels ------------------------------------------------------------
+
+  private openChannel(session: Session, client: Client): void {
     if (FINAL_STATES.has(session.state)) return
+    if (session.exec !== undefined) this.runExec(session, client)
+    else if (session.stickyName !== undefined) this.openSticky(session, client, session.stickyName)
+    else this.openShell(session, client, undefined)
+  }
+
+  private openShell(session: Session, client: Client, sticky: 'unavailable' | undefined): void {
     client.shell(
       { term: 'xterm-256color', cols: session.cols, rows: session.rows, width: 0, height: 0 },
       (error, stream) => {
-        if (error instanceof Error) {
-          session.forcedError = 'SSH_SHELL_FAILED'
-          this.fail(session, error)
-          return
-        }
-        if (FINAL_STATES.has(session.state)) {
-          stream.close()
-          return
-        }
-        session.stream = stream
-        session.wasReady = true
-        session.used = session.trying ?? undefined
-        session.trying = null
-        // In case the window was resized while connecting.
-        stream.setWindow(session.rows, session.cols, 0, 0)
-        stream.on('data', (chunk: Buffer) => {
-          this.enqueue(session, chunk)
-        })
-        stream.stderr.on('data', (chunk: Buffer) => {
-          this.enqueue(session, chunk)
-        })
-        stream.on('close', () => {
-          session.shellClosed = true
-          this.flush(session)
-          client.end()
-        })
-        this.setState(session, 'ready')
-        if (session.target.hostId !== undefined) {
-          this.options.onConnected?.(session.target.hostId)
-        }
+        this.attach(session, error, stream, sticky)
       },
     )
+  }
+
+  /**
+   * Sticky session: checks for tmux, then starts the shell inside
+   * `tmux new-session -A -s <name>`, which resumes the session when it exists.
+   * Without tmux, a normal shell opens and the tab explains how to install it.
+   */
+  private openSticky(session: Session, client: Client, name: string): void {
+    const probe = `command -v tmux >/dev/null 2>&1 || exit 127; tmux has-session -t ${name} 2>/dev/null && exit 3; exit 0`
+    client.exec(probe, (error, stream) => {
+      if (error instanceof Error) {
+        this.openShell(session, client, 'unavailable')
+        return
+      }
+      let code: number | null = null
+      stream.on('exit', (exitCode: number | null) => {
+        code = exitCode
+      })
+      stream.resume()
+      stream.on('close', () => {
+        if (FINAL_STATES.has(session.state)) return
+        if (code !== 0 && code !== 3) {
+          this.openShell(session, client, 'unavailable')
+          return
+        }
+        const pty = {
+          term: 'xterm-256color',
+          cols: session.cols,
+          rows: session.rows,
+          width: 0,
+          height: 0,
+        }
+        client.exec(`tmux new-session -A -s ${name}`, { pty }, (execError, shell) => {
+          this.attach(session, execError, shell, code === 3 ? 'resumed' : 'started')
+        })
+      })
+    })
+  }
+
+  private attach(
+    session: Session,
+    error: Error | undefined,
+    stream: ClientChannel,
+    sticky: 'started' | 'resumed' | 'unavailable' | undefined,
+  ): void {
+    if (error instanceof Error) {
+      this.finishSession(session, 'error', 'SSH_SHELL_FAILED')
+      return
+    }
+    if (FINAL_STATES.has(session.state)) {
+      stream.close()
+      return
+    }
+    const link = session.link
+    session.stream = stream
+    session.shellExited = false
+    // In case the window was resized while connecting.
+    stream.setWindow(session.rows, session.cols, 0, 0)
+    if (session.paused) stream.pause()
+    stream.on('data', (chunk: Buffer) => {
+      this.enqueue(session, chunk)
+    })
+    stream.stderr.on('data', (chunk: Buffer) => {
+      this.enqueue(session, chunk)
+    })
+    stream.on('exit', () => {
+      session.shellExited = true
+    })
+    stream.on('close', () => {
+      if (session.stream !== stream) return
+      this.flush(session)
+      // A dropped connection closes its channels too; the link handles that.
+      if (link.state !== 'ready' && !session.shellExited) return
+      session.stream = undefined
+      this.finishSession(session, 'closed')
+    })
+    this.setState(session, 'ready', sticky === undefined ? {} : { sticky })
+    const startup = link.target.startupCommand
+    if (startup !== undefined && startup !== '' && sticky !== 'resumed') {
+      stream.write(`${startup}\r`)
+    }
+    if (link.target.hostId !== undefined) this.options.onConnected?.(link.target.hostId)
   }
 
   /** runCommand: one command over an exec channel, its output collected in main. */
   private runExec(session: Session, client: Client): void {
     const exec = session.exec
-    if (exec === undefined || FINAL_STATES.has(session.state)) return
+    if (exec === undefined) return
     client.exec(exec.command, (error, stream) => {
       if (error instanceof Error) {
-        session.forcedError = 'SSH_SHELL_FAILED'
-        this.fail(session, error)
+        this.finishSession(session, 'error', 'SSH_SHELL_FAILED')
         return
       }
-      session.wasReady = true
       this.setState(session, 'ready')
       let exitCode: number | null = null
       const collect = (chunk: Buffer): void => {
@@ -547,16 +931,15 @@ export class SessionManager {
           exec.settled = true
           exec.resolve({ exitCode, output: Buffer.concat(exec.output).toString('utf8') })
         }
-        session.shellClosed = true
-        this.finish(session, 'closed')
+        this.finishSession(session, 'closed')
       })
     })
   }
 
   /**
-   * Connects, runs one command and disconnects, with the same host key checks
-   * and sign-in questions as a terminal session. `strict`: sign in with the
-   * target's credential only (no password or keyboard questions).
+   * Connects, runs one command and disconnects, with the same proxy, jump
+   * hosts, host key checks and sign-in questions as a terminal session.
+   * `strict`: sign in to the target with its credential only.
    */
   runCommand(
     owner: EventSink,
@@ -564,26 +947,20 @@ export class SessionManager {
     command: string,
     options: { strict?: boolean } = {},
   ): Promise<CommandResult> {
-    const session = new Session(randomUUID(), owner, target, 80, 24)
+    const link = new Link(owner, target, options.strict === true)
+    const session = new Session(randomUUID(), owner, link, 80, 24, undefined)
+    link.sessions.add(session)
     this.sessions.set(session.id, session)
     const result = new Promise<CommandResult>((resolve, reject) => {
-      session.exec = {
-        command,
-        strict: options.strict === true,
-        output: [],
-        bytes: 0,
-        settled: false,
-        resolve,
-        reject,
-      }
+      session.exec = { command, output: [], bytes: 0, settled: false, resolve, reject }
     })
     setImmediate(() => {
-      this.connect(session)
+      void this.startLink(link)
     })
-    return result.finally(() => {
-      this.sessions.delete(session.id)
-    })
+    return result
   }
+
+  // --- Output --------------------------------------------------------------
 
   private enqueue(session: Session, chunk: Buffer): void {
     session.pending.push(chunk)

@@ -79,10 +79,13 @@ function GroupForm({
     editing?.defaults.environment ?? '',
   )
   const [identityId, setIdentityId] = useState(editing?.defaults.identityId ?? '')
+  const [jumpHostId, setJumpHostId] = useState(editing?.defaults.jumpHostId ?? '')
+  const hosts = useHostsStore((state) => state.hosts)
   const [showMore, setShowMore] = useState(
     editing?.defaults.port !== undefined ||
       editing?.defaults.environment !== undefined ||
-      editing?.defaults.identityId !== undefined,
+      editing?.defaults.identityId !== undefined ||
+      editing?.defaults.jumpHostId !== undefined,
   )
   const [errors, setErrors] = useState<{ name?: string; port?: string; form?: string }>({})
   const [saving, setSaving] = useState(false)
@@ -115,6 +118,7 @@ function GroupForm({
         ...(portNumber === undefined ? {} : { port: portNumber }),
         ...(environment === '' ? {} : { environment }),
         ...(identityId === '' ? {} : { identityId }),
+        ...(jumpHostId === '' ? {} : { jumpHostId }),
       },
     })
     setSaving(false)
@@ -238,6 +242,32 @@ function GroupForm({
                 {ENVIRONMENTS.map((item) => (
                   <option key={item} value={item}>
                     {t(`environments.${item}`)}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          <Field label={t('hostForm.jumpHost')} hint={t('groups.jumpHostHint')}>
+            {({ id, describedBy }) => (
+              <Select
+                id={id}
+                value={jumpHostId}
+                aria-describedby={describedBy}
+                onChange={(event) => {
+                  setJumpHostId(event.target.value)
+                }}
+              >
+                <option value="">
+                  {inherited.jumpHostId.value === undefined
+                    ? t('hostForm.jumpNone')
+                    : t('groups.jumpInherit', {
+                        name:
+                          hosts.find((host) => host.id === inherited.jumpHostId.value)?.name ?? '',
+                      })}
+                </option>
+                {hosts.map((host) => (
+                  <option key={host.id} value={host.id}>
+                    {host.name}
                   </option>
                 ))}
               </Select>

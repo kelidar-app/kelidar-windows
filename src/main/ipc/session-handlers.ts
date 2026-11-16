@@ -41,6 +41,15 @@ export function registerSessionHandlers<E extends InvokeEventLike>(
     return undefined
   })
 
+  router.handle('session:duplicate', ({ sessionId, cols, rows }, event) =>
+    sessions.duplicate(deps.ownerOf(event), sessionId, cols, rows),
+  )
+
+  router.handle('session:reconnectNow', ({ sessionId }, event) => {
+    sessions.reconnectNow(deps.ownerOf(event), sessionId)
+    return undefined
+  })
+
   router.handle('prompt:answer', ({ promptId, answer }, event) => {
     // Unknown or foreign prompt ids are ignored: the dialog may have been cancelled already.
     deps.prompts.answer(deps.ownerOf(event), promptId, answer)

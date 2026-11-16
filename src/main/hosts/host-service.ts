@@ -2,19 +2,29 @@ import { randomUUID } from 'node:crypto'
 import { groupDefaultsFor, resolveHostSettings } from '@shared/groups'
 import type { HostView, ParsedHostSaveRequest } from '@shared/hosts'
 import type { AuthRequest } from '@shared/keychain'
-import type { AuthRef, HostRecord, Id, IdentityRecord } from '@shared/records'
+import {
+  MAX_JUMP_HOSTS,
+  type AuthRef,
+  type HostRecord,
+  type Id,
+  type IdentityRecord,
+} from '@shared/records'
 import { AppError } from '../ipc/app-error'
 import {
+  addSecret,
   applyAuth,
   checkAuth,
   credentialFor,
   live,
   retireAuth,
+  retireSecret,
+  secretValue,
   toSignInView,
   type CheckedAuth,
 } from '../keychain/auth-store'
+import type { ProxyConfig } from '../ssh/proxy'
 import type { UsedCredential } from '../ssh/auth'
-import type { ConnectTarget } from '../ssh/session-manager'
+import type { ConnectTarget, HopTarget } from '../ssh/session-manager'
 import type { VaultService } from '../vault/service'
 import type { VaultData } from '../vault/vault'
 import type { KeyFileImports, PendingKeyFile } from './key-files'
@@ -55,12 +65,52 @@ export function effectiveSignIn(
   return { username: host.username, auth: host.auth }
 }
 
+/** The host this one connects through: its own choice, else its group's. */
+export function effectiveJump(
+  data: VaultData,
+  host: HostRecord,
+): { hostId: Id; from: 'host' | 'group' } | undefined {
+  if (host.directConnect === true) return undefined
+  if (host.jumpHostId !== undefined) return { hostId: host.jumpHostId, from: 'host' }
+  const fromGroup = groupDefaultsFor(host.groupId, data.groups.filter(live)).jumpHostId.value
+  return fromGroup === undefined || fromGroup === host.id
+    ? undefined
+    : { hostId: fromGroup, from: 'group' }
+}
+
+/**
+ * The jump hosts in the order they are reached from this computer. Fails on a
+ * missing host, a loop, or more than MAX_JUMP_HOSTS hops.
+ */
+export function jumpChain(data: VaultData, host: HostRecord): HostRecord[] {
+  const chain: HostRecord[] = []
+  const seen = new Set<Id>([host.id])
+  let current = host
+  for (;;) {
+    const jump = effectiveJump(data, current)
+    if (jump === undefined) return chain
+    if (seen.has(jump.hostId) || chain.length >= MAX_JUMP_HOSTS) {
+      throw new AppError('JUMP_HOST_LOOP')
+    }
+    const next = data.hosts.find((item) => item.id === jump.hostId && live(item))
+    if (next === undefined) throw new AppError('JUMP_HOST_NOT_FOUND')
+    chain.unshift(next)
+    seen.add(next.id)
+    current = next
+  }
+}
+
 export function toHostView(data: VaultData, host: HostRecord): HostView {
   const groups = data.groups.filter(live)
   const groupId = groups.some((group) => group.id === host.groupId) ? host.groupId : undefined
   const effective = resolveHostSettings({ ...host, groupId }, groups)
   const signIn = effectiveSignIn(data, { ...host, groupId })
   const identity = signIn.identity?.record
+  const jump = effectiveJump(data, host)
+  const jumpHost =
+    jump === undefined
+      ? undefined
+      : data.hosts.find((item) => item.id === jump.hostId && live(item))
   return {
     id: host.id,
     name: host.name,
@@ -82,13 +132,72 @@ export function toHostView(data: VaultData, host: HostRecord): HostView {
       ? {}
       : { identity: { id: identity.id, name: identity.name, from: signIn.identity.from } }),
     agentForward: host.agentForward === true,
+    ...(jump === undefined || jumpHost === undefined
+      ? {}
+      : { jump: { hostId: jumpHost.id, name: jumpHost.name, from: jump.from } }),
+    ownJump:
+      host.directConnect === true
+        ? { type: 'none' }
+        : host.jumpHostId === undefined
+          ? { type: 'inherit' }
+          : { type: 'host', hostId: host.jumpHostId },
+    ...(host.proxy === undefined
+      ? {}
+      : {
+          proxy: {
+            type: host.proxy.type,
+            host: host.proxy.host,
+            port: host.proxy.port,
+            ...(host.proxy.username === undefined ? {} : { username: host.proxy.username }),
+            hasPassword: host.proxy.secretId !== undefined,
+          },
+        }),
+    ...(host.startupCommand === undefined ? {} : { startupCommand: host.startupCommand }),
+    stickySession: host.stickySession === true,
     createdAt: host.createdAt,
     updatedAt: host.updatedAt,
     ...(host.lastConnectedAt === undefined ? {} : { lastConnectedAt: host.lastConnectedAt }),
   }
 }
 
-type OptionalHostField = 'port' | 'groupId' | 'color' | 'environment' | 'identityId' | 'username'
+function hopTarget(data: VaultData, host: HostRecord): HopTarget {
+  const signIn = effectiveSignIn(data, host)
+  if (signIn.identity !== undefined && signIn.identity.record === undefined) {
+    throw new AppError('IDENTITY_NOT_FOUND')
+  }
+  if (signIn.username === undefined) throw new AppError('USERNAME_REQUIRED')
+  return {
+    hostId: host.id,
+    title: host.name,
+    address: host.address,
+    port: toHostView(data, host).port,
+    username: signIn.username,
+    credential: credentialFor(data, signIn.auth),
+  }
+}
+
+function proxyConfig(data: VaultData, host: HostRecord): ProxyConfig | undefined {
+  const proxy = host.proxy
+  if (proxy === undefined) return undefined
+  const password = secretValue(data, proxy.secretId)
+  return {
+    type: proxy.type,
+    host: proxy.host,
+    port: proxy.port,
+    ...(proxy.username === undefined ? {} : { username: proxy.username }),
+    ...(password === undefined ? {} : { password }),
+  }
+}
+
+type OptionalHostField =
+  | 'port'
+  | 'groupId'
+  | 'color'
+  | 'environment'
+  | 'identityId'
+  | 'username'
+  | 'jumpHostId'
+  | 'startupCommand'
 
 /** Sets an optional field, or removes it when the value is undefined. */
 function setOptional<K extends OptionalHostField>(
@@ -175,6 +284,24 @@ export class HostService {
       setOptional(host, 'environment', request.environment)
       if (request.agentForward === true) host.agentForward = true
       else delete host.agentForward
+      if (request.stickySession === true) host.stickySession = true
+      else delete host.stickySession
+      setOptional(
+        host,
+        'startupCommand',
+        request.startupCommand === '' ? undefined : request.startupCommand,
+      )
+      const jump = request.jump ?? { type: 'inherit' }
+      setOptional(host, 'jumpHostId', jump.type === 'host' ? jump.hostId : undefined)
+      if (jump.type === 'none') host.directConnect = true
+      else delete host.directConnect
+      if (jump.type === 'host') {
+        if (jump.hostId === host.id) throw new AppError('JUMP_HOST_LOOP')
+        if (!data.hosts.some((item) => item.id === jump.hostId && live(item))) {
+          throw new AppError('JUMP_HOST_NOT_FOUND')
+        }
+      }
+      this.applyProxy(data, host, request.proxy, now)
 
       if (plan.kind === 'own') {
         host.auth = applyAuth(data, plan.checked, current?.auth, now)
@@ -187,12 +314,51 @@ export class HostService {
         setOptional(host, 'identityId', plan.kind === 'identity' ? plan.identityId : undefined)
       }
       if (current === undefined) data.hosts.push(host)
+      // A jump host that leads back here (directly or through groups) is refused.
+      jumpChain(data, host)
       return toHostView(data, host)
     })
     if (plan.kind === 'own' && plan.checked.type === 'newKey' && plan.checked.token !== undefined) {
       this.keyFiles.discard(plan.checked.token)
     }
     return saved
+  }
+
+  /** The proxy password is a secret owned by the host, like its own password. */
+  private applyProxy(
+    data: VaultData,
+    host: HostRecord,
+    request: ParsedHostSaveRequest['proxy'],
+    now: string,
+  ): void {
+    const previous = host.proxy
+    if (request === undefined) {
+      if (previous?.secretId !== undefined) retireSecret(data, previous.secretId, now)
+      delete host.proxy
+      return
+    }
+    let secretId = previous?.secretId
+    if (request.password === '' && secretId !== undefined) {
+      retireSecret(data, secretId, now)
+      secretId = undefined
+    } else if (request.password !== undefined && request.password !== '') {
+      const secret =
+        secretId === undefined
+          ? undefined
+          : data.secrets.find((item) => item.id === secretId && live(item))
+      if (secret === undefined) secretId = addSecret(data, request.password, now)
+      else {
+        secret.value = request.password
+        secret.updatedAt = now
+      }
+    }
+    host.proxy = {
+      type: request.type,
+      host: request.host,
+      port: request.port,
+      ...(request.username === undefined ? {} : { username: request.username }),
+      ...(secretId === undefined ? {} : { secretId }),
+    }
   }
 
   private planSignIn(
@@ -290,28 +456,29 @@ export class HostService {
       const host = this.find(data, id)
       const now = this.now().toISOString()
       retireAuth(data, host.auth, now)
+      if (host.proxy?.secretId !== undefined) retireSecret(data, host.proxy.secretId, now)
       host.deletedAt = now
       host.updatedAt = now
     })
   }
 
-  /** Main only: everything a session needs, including the secret values. */
+  /**
+   * Main only: everything a session needs, including the secret values: the
+   * jump hosts on the way, and the proxy of the first connection.
+   */
   async connectTarget(id: Id): Promise<ConnectTarget> {
     const data = (await this.vaults.get()).read()
     const host = this.find(data, id)
-    const signIn = effectiveSignIn(data, host)
-    if (signIn.identity !== undefined && signIn.identity.record === undefined) {
-      throw new AppError('IDENTITY_NOT_FOUND')
-    }
-    if (signIn.username === undefined) throw new AppError('USERNAME_REQUIRED')
+    const chain = jumpChain(data, host)
+    const first = chain[0] ?? host
+    const proxy = proxyConfig(data, first)
     return {
-      hostId: host.id,
-      title: host.name,
-      address: host.address,
-      port: toHostView(data, host).port,
-      username: signIn.username,
-      credential: credentialFor(data, signIn.auth),
+      ...hopTarget(data, host),
       ...(host.agentForward === true ? { agentForward: true } : {}),
+      ...(chain.length === 0 ? {} : { via: chain.map((hop) => hopTarget(data, hop)) }),
+      ...(proxy === undefined ? {} : { proxy }),
+      ...(host.startupCommand === undefined ? {} : { startupCommand: host.startupCommand }),
+      ...(host.stickySession === true ? { stickySession: true } : {}),
     }
   }
 

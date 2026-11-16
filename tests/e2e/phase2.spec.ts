@@ -12,12 +12,15 @@ const PASSWORD = 'e2e-Pass-Osprey-6620'
  * tags, favorites, recent, card and list views, search, the command palette
  * and the shortcut cheat sheet. Step 2.2 (Credentials): the Keychain (key
  * generation, copying the public key, identities) and Upgrade to key login.
+ * Step 2.3 (Reach): a jump host chosen in the form, the sticky session
+ * command shown before it runs, and a new tab on the same connection.
  * Later steps add to this file.
  */
 test('Phase 2 smoke: organize hosts, search, palette and shortcuts', async () => {
   const userData = await mkdtemp(path.join(os.tmpdir(), 'kelidar-e2e-p2-'))
   let server: TestServer | undefined
   let keyServer: TestServer | undefined
+  let behindServer: TestServer | undefined
   try {
     server = await startTestServer({ password: PASSWORD })
     let { app, page, consoleErrors } = await launch(userData)
@@ -206,6 +209,39 @@ test('Phase 2 smoke: organize hosts, search, palette and shortcuts', async () =>
         .getByLabel('Signs in with a private key'),
     ).toBeVisible()
 
+    // A host behind a jump host (Box), set in the form.
+    behindServer = await startTestServer({ password: PASSWORD })
+    await page.keyboard.press('Control+n')
+    dialog = page.getByRole('dialog', { name: 'New host' })
+    await dialog.getByLabel('Name', { exact: true }).fill('Behind')
+    await dialog.getByLabel('Address').fill('127.0.0.1')
+    await dialog.getByLabel('User name').fill('tester')
+    await dialog.getByRole('textbox', { name: 'Password' }).fill(PASSWORD)
+    await dialog.getByRole('button', { name: 'More options' }).click()
+    await dialog.getByLabel('Port').fill(String(behindServer.port))
+    await dialog.getByLabel('Jump host').selectOption({ label: 'Box' })
+    // The sticky session option shows the exact command before anything runs.
+    await expect(
+      dialog.locator('code', { hasText: 'tmux new-session -A -s kelidar-' }),
+    ).toBeVisible()
+    await dialog.getByRole('button', { name: 'Save' }).click()
+    await expect(dialog).toBeHidden()
+    const behind = page.locator('[data-host-item]', { hasText: 'Behind' })
+    await expect(behind).toContainText('via Box')
+    await behind.getByRole('button', { name: 'Connect to Behind' }).click()
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Trust and connect' }).click()
+    await expect(page.locator('[data-tab-state="ready"]')).toHaveCount(3)
+    expect(server.forwards).toEqual([{ host: '127.0.0.1', port: behindServer.port }])
+
+    // Ctrl+Shift+T: a second tab on the same connection, no new sign-in.
+    const signIns = behindServer.authAttempts.length
+    await page.keyboard.press('Control+Shift+T')
+    await expect(page.locator('[data-tab-state="ready"]')).toHaveCount(4)
+    await expect.poll(() => behindServer?.openShells()).toBe(2)
+    expect(behindServer.connections).toHaveLength(1)
+    expect(behindServer.authAttempts).toHaveLength(signIns)
+    await page.keyboard.press('Control+1')
+
     // Palette preferences: switch to Persian, and the layout mirrors.
     await page.keyboard.press('Control+k')
     await page.keyboard.type('فارسی')
@@ -233,6 +269,7 @@ test('Phase 2 smoke: organize hosts, search, palette and shortcuts', async () =>
     await closeAll()
     await server?.close()
     await keyServer?.close()
+    await behindServer?.close()
     await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
   }
 })
