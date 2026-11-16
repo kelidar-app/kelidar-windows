@@ -62,6 +62,55 @@ describe('groups over IPC', () => {
       .toEqual(expect.any(String))
   })
 
+  it('moves hosts and groups by drag and drop, refusing loops', async () => {
+    const h = await setup()
+    const lab = await h.call<GroupView>('groups:save', { name: 'Lab', defaults: { port: 2222 } })
+    const rack = await h.call<GroupView>('groups:save', { name: 'Rack', parentId: lab.id })
+    const host = await h.call<HostView>('hosts:save', {
+      name: 'box',
+      address: 'box.example.com',
+      username: 'u',
+      auth: { type: 'password', password: PASSWORD },
+    })
+
+    // Into a group: the host now inherits the group's port. Its sign-in stays.
+    const moved = await h.call<HostView>('hosts:move', { id: host.id, groupId: rack.id })
+    expect(moved).toMatchObject({ groupId: rack.id, port: 2222, signIn: { method: 'password' } })
+    const out = await h.call<HostView>('hosts:move', { id: host.id })
+    expect(out.groupId).toBeUndefined()
+    expect(out.port).toBe(22)
+
+    // A group cannot go into its own subgroup; the top level is fine.
+    await expect(h.invoke('groups:move', { id: lab.id, parentId: rack.id })).resolves.toEqual({
+      ok: false,
+      error: { code: 'GROUP_PARENT_INVALID' },
+    })
+    const top = await h.call<GroupView>('groups:move', { id: rack.id })
+    expect(top.parentId).toBeUndefined()
+    const back = await h.call<GroupView>('groups:move', { id: rack.id, parentId: lab.id })
+    expect(back.parentId).toBe(lab.id)
+
+    // A group whose jump host leads back to the host is refused for that host.
+    const bastion = await h.call<HostView>('hosts:save', {
+      name: 'bastion',
+      address: 'bastion.example.com',
+      username: 'u',
+      auth: { type: 'password' },
+      jump: { type: 'host', hostId: host.id },
+    })
+    const behind = await h.call<GroupView>('groups:save', {
+      name: 'Behind bastion',
+      defaults: { jumpHostId: bastion.id },
+    })
+    await expect(h.invoke('hosts:move', { id: host.id, groupId: behind.id })).resolves.toEqual({
+      ok: false,
+      error: { code: 'JUMP_HOST_LOOP' },
+    })
+    await expect(
+      h.invoke('hosts:move', { id: host.id, groupId: crypto.randomUUID() }),
+    ).resolves.toEqual({ ok: false, error: { code: 'GROUP_NOT_FOUND' } })
+  })
+
   it('favorites a host, refuses bad payloads, and never sends secrets with groups', async () => {
     const h = await setup()
     const group = await h.call<GroupView>('groups:save', { name: 'Web', color: 'blue' })

@@ -10,7 +10,7 @@ import {
   Usb,
   UserRound,
 } from 'lucide-react'
-import type { KeyboardEvent, MouseEvent } from 'react'
+import type { DragEvent, KeyboardEvent, MouseEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { formatTarget } from '@shared/address'
 import type { HostView } from '@shared/hosts'
@@ -22,6 +22,7 @@ import { useKeychainDialogStore } from '@renderer/stores/keychain'
 import { useTabsStore } from '@renderer/stores/tabs'
 import { useUiStore } from '@renderer/stores/ui'
 import { COLOR_EDGE, ENVIRONMENT_BADGE } from './colors'
+import { DRAG_TYPE, hostDragItem, useDragStore } from './drag'
 import { canUpgradeToKey, HOST_KEYS } from './host-keys'
 
 export type HostLayout = 'cards' | 'list'
@@ -214,6 +215,16 @@ export function HostItem({ host, layout }: { host: HostView; layout: HostLayout 
   )
 
   const common = {
+    // Drag onto a group's header to move the host into that group.
+    draggable: true,
+    onDragStart: (event: DragEvent<HTMLLIElement>) => {
+      event.dataTransfer.effectAllowed = 'move'
+      event.dataTransfer.setData(DRAG_TYPE, host.id)
+      useDragStore.getState().start(hostDragItem(host))
+    },
+    onDragEnd: () => {
+      useDragStore.getState().end()
+    },
     tabIndex: 0,
     'aria-label': t('hosts.rowLabel', { name: host.name, target }),
     'aria-keyshortcuts': 'Enter Control+E Control+D Delete',

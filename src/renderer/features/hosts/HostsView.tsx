@@ -25,6 +25,7 @@ import { useSettingsStore } from '@renderer/stores/settings'
 import { useTabsStore } from '@renderer/stores/tabs'
 import { useUiStore } from '@renderer/stores/ui'
 import { COLOR_DOT } from './colors'
+import { canDrop, DRAG_TYPE, groupDragItem, useDragStore } from './drag'
 import { EnvironmentBadge, HostItem, type HostLayout } from './HostItem'
 import { buildTree, favoriteHosts, recentHosts, searchHosts, type GroupNode } from './host-search'
 import { QuickConnect } from './QuickConnect'
@@ -94,6 +95,7 @@ export function HostsView() {
         <QuickConnect />
       </div>
 
+      <MoveError />
       {(error ?? openError) !== null && (
         <p
           role="alert"
@@ -182,7 +184,9 @@ function Toolbar({
   )
 
   return (
-    <div className="flex items-center gap-2 px-6 pt-4 pb-2">
+    <div className="relative flex items-center gap-2 px-6 pt-4 pb-2">
+      {/* Laid over the search bar while dragging, so nothing in the list moves. */}
+      <TopLevelDropZone />
       <div className="relative min-w-0 flex-1">
         <Search
           aria-hidden
@@ -343,10 +347,64 @@ function GroupSection({
   const { group } = node
   const contentId = `group-${group.id}`
   const port = group.defaults.port
+  const groups = useHostsStore((state) => state.groups)
+  const dragging = useDragStore((state) => state.item)
+  const drop = useDragStore((state) => state.drop)
+  const [over, setOver] = useState(false)
+  const expandTimer = useRef<number | undefined>(undefined)
+  const accepts = canDrop(dragging, group.id, groups)
+  const stopExpandTimer = (): void => {
+    window.clearTimeout(expandTimer.current)
+    expandTimer.current = undefined
+  }
 
   return (
     <section aria-label={group.name} data-group-id={group.id} className="flex flex-col gap-2">
-      <div className="group/header flex items-center gap-1 rounded-md hover:bg-muted">
+      <div
+        data-drop-target={accepts ? '' : undefined}
+        data-group-header=""
+        draggable
+        onDragStart={(event) => {
+          // Only the header drags the group; hosts inside drag themselves.
+          if (event.target !== event.currentTarget) return
+          event.dataTransfer.effectAllowed = 'move'
+          event.dataTransfer.setData(DRAG_TYPE, group.id)
+          useDragStore.getState().start(groupDragItem(group))
+        }}
+        onDragEnd={() => {
+          useDragStore.getState().end()
+        }}
+        onDragOver={(event) => {
+          if (!accepts) return
+          event.preventDefault()
+          event.dataTransfer.dropEffect = 'move'
+          if (!over) setOver(true)
+        }}
+        onDragEnter={() => {
+          // A folded group opens when something hovers over it, for drops inside.
+          if (accepts && collapsed && expandTimer.current === undefined) {
+            expandTimer.current = window.setTimeout(() => {
+              expandTimer.current = undefined
+              if (useUiStore.getState().collapsedGroups.has(group.id)) toggle(group.id)
+            }, 700)
+          }
+        }}
+        onDragLeave={(event) => {
+          if (event.currentTarget.contains(event.relatedTarget as Node | null)) return
+          setOver(false)
+          stopExpandTimer()
+        }}
+        onDrop={(event) => {
+          event.preventDefault()
+          setOver(false)
+          stopExpandTimer()
+          void drop(group.id)
+        }}
+        className={cn(
+          'group/header flex items-center gap-1 rounded-md hover:bg-muted',
+          over && accepts && 'bg-accent ring-2 ring-primary',
+        )}
+      >
         <button
           type="button"
           aria-expanded={!collapsed}
@@ -447,6 +505,68 @@ function GroupSection({
         )}
       </div>
     </section>
+  )
+}
+
+/**
+ * While dragging something out of a group: drop here to move it to the top
+ * level. It covers the search bar, so the list keeps its place under the cursor.
+ */
+function TopLevelDropZone() {
+  const { t } = useTranslation()
+  const dragging = useDragStore((state) => state.item)
+  const drop = useDragStore((state) => state.drop)
+  const groups = useHostsStore((state) => state.groups)
+  const [over, setOver] = useState(false)
+  if (!canDrop(dragging, undefined, groups)) return null
+  return (
+    <div
+      data-drop-target=""
+      data-top-level-drop=""
+      onDragOver={(event) => {
+        event.preventDefault()
+        event.dataTransfer.dropEffect = 'move'
+        if (!over) setOver(true)
+      }}
+      onDragLeave={() => {
+        setOver(false)
+      }}
+      onDrop={(event) => {
+        event.preventDefault()
+        setOver(false)
+        void drop(undefined)
+      }}
+      className={cn(
+        'absolute inset-x-6 top-4 bottom-2 z-10 flex items-center justify-center rounded-md border-2 border-dashed border-border bg-card px-3 text-center text-sm text-muted-foreground',
+        over && 'border-primary bg-accent text-accent-foreground',
+      )}
+    >
+      {dragging?.kind === 'host' ? t('hosts.dropUngrouped') : t('groups.dropTopLevel')}
+    </div>
+  )
+}
+
+/** A move that main refused (a loop, too deep…), shown until the next drag. */
+function MoveError() {
+  const { t } = useTranslation()
+  const error = useDragStore((state) => state.error)
+  const clear = useDragStore((state) => state.clearError)
+  if (error === null) return null
+  return (
+    <div
+      role="alert"
+      className="mx-6 mt-4 flex items-start gap-2 rounded-md border border-destructive px-3 py-2 text-sm text-destructive"
+    >
+      <p className="flex-1">{t(`errors.${error}`)}</p>
+      <button
+        type="button"
+        aria-label={t('common.close')}
+        className="rounded p-0.5 hover:bg-destructive/10"
+        onClick={clear}
+      >
+        <X aria-hidden className="size-4" />
+      </button>
+    </div>
   )
 }
 

@@ -94,6 +94,24 @@ export class GroupService {
     })
   }
 
+  /** Moves a group (with everything in it) into another group, or to the top level. */
+  async move(id: Id, parentId: Id | undefined): Promise<GroupView> {
+    const vault = await this.vaults.get()
+    return vault.update((data) => {
+      const groups = liveGroups(data)
+      const group = groups.find((item) => item.id === id)
+      if (group === undefined) throw new AppError('GROUP_NOT_FOUND')
+      const problem = checkParent(id, parentId, groups)
+      if (problem === 'not-found') throw new AppError('GROUP_NOT_FOUND')
+      if (problem === 'cycle') throw new AppError('GROUP_PARENT_INVALID')
+      if (problem === 'too-deep') throw new AppError('GROUP_TOO_DEEP')
+      if (parentId === undefined) delete group.parentId
+      else group.parentId = parentId
+      group.updatedAt = this.now().toISOString()
+      return toGroupView(group, liveGroups(data))
+    })
+  }
+
   /**
    * Deletes one group. Its hosts and subgroups move up to its parent (or to
    * the top level), so deleting a group never deletes a host.

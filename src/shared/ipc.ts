@@ -71,6 +71,11 @@ export const ipcContract = {
     request: groupSaveRequestSchema,
     response: groupViewSchema,
   },
+  /** Drag and drop: a group into another group, or to the top level (no parentId). */
+  'groups:move': {
+    request: z.strictObject({ id: idSchema, parentId: idSchema.optional() }),
+    response: groupViewSchema,
+  },
   /** Its hosts and subgroups move up to the deleted group's parent. */
   'groups:delete': {
     request: z.strictObject({ id: idSchema }),
@@ -87,6 +92,11 @@ export const ipcContract = {
   'hosts:delete': {
     request: z.strictObject({ id: idSchema }),
     response: z.undefined(),
+  },
+  /** Drag and drop: a host into a group, or out of any group (no groupId). */
+  'hosts:move': {
+    request: z.strictObject({ id: idSchema, groupId: idSchema.optional() }),
+    response: hostViewSchema,
   },
   'hosts:setFavorite': {
     request: z.strictObject({ id: idSchema, favorite: z.boolean() }),

@@ -242,6 +242,25 @@ test('Phase 2 smoke: organize hosts, search, palette and shortcuts', async () =>
     expect(behindServer.authAttempts).toHaveLength(signIns)
     await page.keyboard.press('Control+1')
 
+    // Drag and drop: "Other" into the Lab group, then back out to the top level.
+    const labHeader = lab.locator('[data-group-header]')
+    await page.locator('[data-host-item]', { hasText: 'Other' }).first().dragTo(labHeader)
+    await expect(lab.locator('[data-host-item]', { hasText: 'Other' })).toBeVisible()
+    const other = lab.locator('[data-host-item]', { hasText: 'Other' })
+    const from = await other.boundingBox()
+    if (from === null) throw new Error('Other is not visible')
+    await page.mouse.move(from.x + 20, from.y + from.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(from.x + 40, from.y + from.height / 2 + 10, { steps: 5 })
+    const zone = page.locator('[data-top-level-drop]')
+    await expect(zone).toContainText('take the host out of its group')
+    const to = await zone.boundingBox()
+    if (to === null) throw new Error('no drop zone')
+    await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 5 })
+    await page.mouse.up()
+    await expect(lab.locator('[data-host-item]', { hasText: 'Other' })).toHaveCount(0)
+    await expect(page.locator('[data-top-level-drop]')).toHaveCount(0)
+
     // Palette preferences: switch to Persian, and the layout mirrors.
     await page.keyboard.press('Control+k')
     await page.keyboard.type('فارسی')

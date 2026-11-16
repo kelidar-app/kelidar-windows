@@ -32,6 +32,8 @@ export function registerHostHandlers<E extends InvokeEventLike>(
     return undefined
   })
   router.handle('hosts:setFavorite', ({ id, favorite }) => deps.hosts.setFavorite(id, favorite))
+  router.handle('hosts:move', ({ id, groupId }) => deps.hosts.move(id, groupId))
+  router.handle('groups:move', ({ id, parentId }) => deps.groups.move(id, parentId))
   router.handle('groups:list', () => deps.groups.list())
   router.handle('groups:save', (request) => deps.groups.save(request))
   router.handle('groups:delete', async ({ id }) => {

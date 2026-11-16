@@ -58,7 +58,8 @@
     "searchHint": "Press Enter to connect to the first result. Start a word with # to search tags only.",
     "signInIdentity": "Signs in with the identity {{name}}",
     "signInAgent": "Signs in with a key from the SSH agent",
-    "via": "via {{name}}"
+    "via": "via {{name}}",
+    "dropUngrouped": "Drop here to take the host out of its group"
   },
   "settings": {
     "title": "Settings",
@@ -316,7 +317,8 @@
     "identityNone": "None",
     "identityInherit": "From the parent group: {{name}}",
     "jumpHostHint": "Hosts in this group connect through this host unless they choose another one or none.",
-    "jumpInherit": "From the parent group: {{name}}"
+    "jumpInherit": "From the parent group: {{name}}",
+    "dropTopLevel": "Drop here to move the group to the top level"
   },
   "environments": {
     "production": "Production",
@@ -392,7 +394,8 @@
     "moveFocus": "Move between hosts",
     "paletteRun": "Run, or connect to the host",
     "paletteHostActions": "More actions for the host",
-    "paletteBack": "Back (when the search is empty)"
+    "paletteBack": "Back (when the search is empty)",
+    "dragTip": "Drag a host or a group onto a group's name to move it there."
   },
   "keychain": {
     "title": "Keychain",

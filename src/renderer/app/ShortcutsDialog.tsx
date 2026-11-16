@@ -88,6 +88,7 @@ export function ShortcutsDialog() {
             <Row label={t('common.delete')} keys={[HOST_KEYS.remove]} />
             <Row label={t('upgrade.open')} keys={[HOST_KEYS.upgrade]} />
             <Row label={t('shortcuts.moveFocus')} keys={[HOST_KEYS.move]} />
+            <li className="py-1.5 text-xs text-muted-foreground">{t('shortcuts.dragTip')}</li>
           </ul>
         </section>
         <section aria-labelledby="shortcuts-palette">

@@ -404,6 +404,25 @@ export class HostService {
     }
   }
 
+  /**
+   * Moves a host into a group, or out of any group. Nothing else changes; the
+   * host now inherits from the new group (port, identity, jump host…).
+   */
+  async move(id: Id, groupId: Id | undefined): Promise<HostView> {
+    const vault = await this.vaults.get()
+    return vault.update((data) => {
+      const host = this.find(data, id)
+      if (groupId !== undefined && !data.groups.some((g) => g.id === groupId && live(g))) {
+        throw new AppError('GROUP_NOT_FOUND')
+      }
+      setOptional(host, 'groupId', groupId)
+      host.updatedAt = this.now().toISOString()
+      // The new group's jump host must not lead back to this host.
+      jumpChain(data, host)
+      return toHostView(data, host)
+    })
+  }
+
   async setFavorite(id: Id, favorite: boolean): Promise<HostView> {
     const vault = await this.vaults.get()
     return vault.update((data) => {
