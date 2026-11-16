@@ -1,6 +1,15 @@
 import { z } from 'zod'
 import { normalizeAddress } from './address'
-import { idSchema, keyTypeSchema, portSchema, timestampSchema } from './records'
+import {
+  colorSchema,
+  environmentSchema,
+  idSchema,
+  keyTypeSchema,
+  MAX_TAGS,
+  portSchema,
+  tagSchema,
+  timestampSchema,
+} from './records'
 
 /**
  * What the renderer may know about a saved host. No secret values and no
@@ -10,8 +19,18 @@ export const hostViewSchema = z.object({
   id: idSchema,
   name: z.string(),
   address: z.string(),
+  /** The port used to connect: the host's own, else its group's, else 22. */
   port: portSchema,
+  /** The port the host sets itself (shown in the form). */
+  ownPort: portSchema.optional(),
   username: z.string(),
+  groupId: idSchema.optional(),
+  tags: z.array(z.string()),
+  color: colorSchema.optional(),
+  /** The environment in effect: the host's own, else its group's. */
+  environment: environmentSchema.optional(),
+  ownEnvironment: environmentSchema.optional(),
+  favorite: z.boolean(),
   signIn: z.discriminatedUnion('method', [
     z.object({ method: z.literal('password') }),
     z.object({ method: z.literal('ask') }),
@@ -50,7 +69,39 @@ export const usernameSchema = z
   .regex(/^[^\s@:]+$/)
 
 /**
- * hosts:save. `id` present = edit.
+ * Tags as typed: trimmed, without a leading #, duplicates (ignoring case)
+ * dropped, first spelling kept.
+ */
+export const tagListSchema = z
+  .array(
+    z
+      .string()
+      .trim()
+      .transform((tag) => tag.replace(/^#+/, '')),
+  )
+  .max(MAX_TAGS * 2)
+  .transform((tags) => {
+    const seen = new Set<string>()
+    const out: string[] = []
+    for (const tag of tags) {
+      const key = tag.toLocaleLowerCase()
+      if (tag === '' || seen.has(key)) continue
+      seen.add(key)
+      out.push(tag)
+    }
+    return out
+  })
+  .pipe(z.array(tagSchema).max(MAX_TAGS))
+
+/** Splits what the user typed in the tags field: commas or spaces separate tags. */
+export function splitTags(text: string): string[] {
+  return text.split(/[\s,،]+/u).filter((tag) => tag !== '')
+}
+
+/**
+ * hosts:save. `id` present = edit. Organizing fields (group, tags, color,
+ * environment, port) replace the saved ones: left out means none. Favorite
+ * is kept; hosts:setFavorite changes it.
  * Password: a value saves it; '' asks every time; undefined keeps the saved
  * one (and on a new host means: ask every time).
  * Key: `keyFileToken` comes from hosts:pickKeyFile; undefined keeps the key.
@@ -61,6 +112,10 @@ export const hostSaveRequestSchema = z.strictObject({
   name: z.string().trim().min(1).max(200),
   address: addressSchema,
   port: portSchema.optional(),
+  groupId: idSchema.optional(),
+  tags: tagListSchema.optional(),
+  color: colorSchema.optional(),
+  environment: environmentSchema.optional(),
   username: usernameSchema,
   auth: z.discriminatedUnion('type', [
     z.strictObject({

@@ -3,6 +3,7 @@ import path from 'node:path'
 import { z } from 'zod'
 import type { ErrorCode } from '@shared/errors'
 import {
+  groupRecordSchema,
   hostRecordSchema,
   knownHostRecordSchema,
   secretRecordSchema,
@@ -10,6 +11,7 @@ import {
 } from '@shared/records'
 import { writeFileAtomic } from '../fs/atomic-write'
 import { generateVaultKey, open as openBox, seal, VAULT_KEY_BYTES } from './crypto'
+import { CURRENT_DATA_VERSION, migrateVaultData } from './migrations'
 import type { KeyWrapper } from './key-wrapper'
 
 export const VAULT_FILE_NAME = 'vault.json'
@@ -17,12 +19,13 @@ export const VAULT_BACKUP_DIR = 'vault-backups'
 export const VAULT_BACKUP_COUNT = 10
 const FILE_FORMAT = 'vault'
 const FILE_VERSION = 1
-const DATA_VERSION = 1
+const DATA_VERSION = CURRENT_DATA_VERSION
 
 /** The decrypted contents. Lives only in main-process memory. */
 export const vaultDataSchema = z.object({
   version: z.literal(DATA_VERSION),
   hosts: z.array(hostRecordSchema),
+  groups: z.array(groupRecordSchema),
   secrets: z.array(secretRecordSchema),
   keys: z.array(sshKeyRecordSchema),
   knownHosts: z.array(knownHostRecordSchema),
@@ -30,7 +33,7 @@ export const vaultDataSchema = z.object({
 export type VaultData = z.infer<typeof vaultDataSchema>
 
 export function emptyVaultData(): VaultData {
-  return { version: DATA_VERSION, hosts: [], secrets: [], keys: [], knownHosts: [] }
+  return { version: DATA_VERSION, hosts: [], groups: [], secrets: [], keys: [], knownHosts: [] }
 }
 
 const base64 = z.string().regex(/^[A-Za-z0-9+/]*={0,2}$/)
@@ -166,7 +169,10 @@ export class Vault {
     } catch (error) {
       throw new VaultError('VAULT_CORRUPT', { cause: error })
     }
-    const parsed = vaultDataSchema.safeParse(raw)
+    const migrated = migrateVaultData(raw)
+    if (migrated.status === 'future') throw new VaultError('VAULT_NEWER_VERSION')
+    if (migrated.status === 'invalid') throw new VaultError('VAULT_CORRUPT')
+    const parsed = vaultDataSchema.safeParse(migrated.data)
     if (!parsed.success) throw new VaultError('VAULT_CORRUPT')
 
     return new Vault(

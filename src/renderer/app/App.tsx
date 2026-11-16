@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { GroupFormDialog } from '@renderer/features/hosts/GroupForm'
 import { HostFormDialog } from '@renderer/features/hosts/HostForm'
 import { HostsView } from '@renderer/features/hosts/HostsView'
 import { PromptDialogs } from '@renderer/features/sessions/PromptDialogs'
@@ -7,6 +8,8 @@ import { TerminalPane } from '@renderer/features/terminal/TerminalPane'
 import { subscribeToPrompts } from '@renderer/stores/prompts'
 import { HOME_TAB, startTabs, useTabsStore } from '@renderer/stores/tabs'
 import { useUiStore } from '@renderer/stores/ui'
+import { CommandPalette } from './CommandPalette'
+import { ShortcutsDialog } from './ShortcutsDialog'
 import { useGlobalShortcuts } from './shortcuts'
 import { Sidebar } from './Sidebar'
 import { TitleBar } from './TitleBar'
@@ -38,7 +41,10 @@ export function App() {
         </main>
       </div>
       <HostFormDialog />
+      <GroupFormDialog />
       <PromptDialogs />
+      <CommandPalette />
+      <ShortcutsDialog />
     </div>
   )
 }

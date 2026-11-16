@@ -77,7 +77,8 @@ test('Phase 1 smoke: vault self-test, save a host, connect, three sessions, no s
     // Three sessions at once.
     for (let i = 0; i < 2; i++) {
       await page.keyboard.press('Control+1')
-      await page.getByRole('button', { name: 'Connect to Test server' }).click()
+      // The host now also shows under Recent; either button connects.
+      await page.getByRole('button', { name: 'Connect to Test server' }).first().click()
     }
     await expect(page.locator('[data-tab-state="ready"]')).toHaveCount(3)
     await expect.poll(() => server?.openShells()).toBe(3)

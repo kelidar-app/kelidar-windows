@@ -4,6 +4,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme } from 'electron
 import { APP_ORIGIN } from '@shared/app'
 import { pickDefaultLanguage, type Theme } from '@shared/settings'
 import { configureAppPaths } from './app-paths'
+import { GroupService } from './hosts/group-service'
 import { HostService } from './hosts/host-service'
 import { KeyFileImports } from './hosts/key-files'
 import { registerIpcHandlers } from './ipc/handlers'
@@ -99,6 +100,7 @@ async function start(): Promise<void> {
   )
   const keyFiles = new KeyFileImports()
   const hosts = new HostService(vaults, keyFiles)
+  const groups = new GroupService(vaults)
   const prompts = new PromptBroker()
   const knownHosts = new KnownHosts(vaults)
   const sessions = new SessionManager({
@@ -108,6 +110,11 @@ async function start(): Promise<void> {
     prompts,
     log: (message) => {
       console.log(`[ssh] ${message}`)
+    },
+    onConnected: (hostId) => {
+      hosts.markConnected(hostId).catch((error: unknown) => {
+        console.warn(`[hosts] could not record the connection: ${describeError(error)}`)
+      })
     },
   })
   const sinkOf = createSinkRegistry((sink) => {
@@ -151,6 +158,7 @@ async function start(): Promise<void> {
 
   registerHostHandlers(router, {
     hosts,
+    groups,
     keyFiles,
     sessionCredential: (event, sessionId) =>
       sessions.usedCredential(sinkOf(event.sender), sessionId),

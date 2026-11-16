@@ -35,11 +35,62 @@ export const authRefSchema = z.discriminatedUnion('type', [
 ])
 export type AuthRef = z.infer<typeof authRefSchema>
 
+/** Named colors, not hex values, so each one can have a light and a dark shade. */
+export const COLORS = [
+  'red',
+  'orange',
+  'amber',
+  'green',
+  'teal',
+  'blue',
+  'violet',
+  'pink',
+  'gray',
+] as const
+export const colorSchema = z.enum(COLORS)
+export type ColorId = z.infer<typeof colorSchema>
+
+export const ENVIRONMENTS = ['production', 'staging', 'development'] as const
+export const environmentSchema = z.enum(ENVIRONMENTS)
+export type Environment = z.infer<typeof environmentSchema>
+
+export const MAX_TAGS = 30
+/** One word: no spaces, commas or #, so "#tag" works in search. */
+export const tagSchema = z
+  .string()
+  .min(1)
+  .max(50)
+  .regex(/^[^\s,#]+$/u)
+
+/**
+ * Values a group hands down to its hosts (and subgroups) unless they set
+ * their own. Identity and jump host join this object in Steps 2.2 and 2.3.
+ */
+export const groupDefaultsSchema = z.object({
+  port: portSchema.optional(),
+  environment: environmentSchema.optional(),
+})
+export type GroupDefaults = z.infer<typeof groupDefaultsSchema>
+
+export const MAX_GROUP_DEPTH = 8
+
+export const groupRecordSchema = baseRecordSchema.extend({
+  name: z.string().min(1).max(200),
+  parentId: idSchema.optional(),
+  color: colorSchema.optional(),
+  defaults: groupDefaultsSchema.optional(),
+})
+export type GroupRecord = z.infer<typeof groupRecordSchema>
+
 export const hostRecordSchema = baseRecordSchema.extend({
   name: z.string().min(1).max(200),
   address: z.string().min(1).max(255),
   port: portSchema.optional(),
-  tags: z.array(z.string().max(100)).max(100),
+  groupId: idSchema.optional(),
+  tags: z.array(tagSchema).max(MAX_TAGS),
+  color: colorSchema.optional(),
+  environment: environmentSchema.optional(),
+  favorite: z.boolean().optional(),
   username: z.string().min(1).max(255).optional(),
   auth: authRefSchema.optional(),
   lastConnectedAt: timestampSchema.optional(),

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { IpcError } from './errors'
+import { groupSaveRequestSchema, groupViewSchema } from './groups'
 import { hostSaveRequestSchema, hostViewSchema, keyFileInfoSchema } from './hosts'
 import type { IpcChannel } from './ipc-channels'
 import type { IpcEvent } from './ipc-events'
@@ -43,6 +44,19 @@ export const ipcContract = {
     request: z.strictObject({ text: z.string().max(10_000_000) }),
     response: z.undefined(),
   },
+  'groups:list': {
+    request: noPayload,
+    response: z.array(groupViewSchema),
+  },
+  'groups:save': {
+    request: groupSaveRequestSchema,
+    response: groupViewSchema,
+  },
+  /** Its hosts and subgroups move up to the deleted group's parent. */
+  'groups:delete': {
+    request: z.strictObject({ id: idSchema }),
+    response: z.undefined(),
+  },
   'hosts:list': {
     request: noPayload,
     response: z.array(hostViewSchema),
@@ -54,6 +68,10 @@ export const ipcContract = {
   'hosts:delete': {
     request: z.strictObject({ id: idSchema }),
     response: z.undefined(),
+  },
+  'hosts:setFavorite': {
+    request: z.strictObject({ id: idSchema, favorite: z.boolean() }),
+    response: hostViewSchema,
   },
   /** Opens a file dialog in main. null when the user cancels. */
   'hosts:pickKeyFile': {

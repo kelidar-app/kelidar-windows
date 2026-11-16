@@ -1,6 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
+import { GroupService } from '../../../src/main/hosts/group-service'
 import { HostService } from '../../../src/main/hosts/host-service'
 import { KeyFileImports } from '../../../src/main/hosts/key-files'
 import { registerHostHandlers } from '../../../src/main/ipc/host-handlers'
@@ -100,6 +101,7 @@ export async function createHarness(
   const vaults = new VaultService(() => Vault.open({ directory: dir, wrapper: fakeWrapper() }))
   const keyFiles = new KeyFileImports()
   const hosts = new HostService(vaults, keyFiles)
+  const groups = new GroupService(vaults)
   const prompts = new PromptBroker()
   const knownHosts = new KnownHosts(vaults)
   const sessions = new SessionManager({
@@ -108,6 +110,9 @@ export async function createHarness(
     knownHosts,
     prompts,
     log: (message) => logs.push(message),
+    onConnected: (hostId) => {
+      void hosts.markConnected(hostId)
+    },
     ...(options.timing === undefined ? {} : { timing: options.timing }),
   })
 
@@ -127,6 +132,7 @@ export async function createHarness(
   )
   registerHostHandlers(router, {
     hosts,
+    groups,
     keyFiles,
     chooseKeyFile: () => Promise.resolve(options.keyFile?.() ?? null),
     sessionCredential: (event, sessionId) => sessions.usedCredential(event.sink, sessionId),

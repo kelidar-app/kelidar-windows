@@ -14,11 +14,14 @@ interface DialogProps {
   role?: 'dialog' | 'alertdialog'
   /** Set false while a dialog must not be dismissed by Esc. */
   dismissible?: boolean
+  /** The title is still read by screen readers, just not shown (the command palette). */
+  hideTitle?: boolean
 }
 
 /**
  * A modal built on the native <dialog> element: focus moves into it and stays
  * there, Esc closes it, and the page behind it is inert. No dependency needed.
+ * Mark the control that should get focus first with `autoFocus data-autofocus`.
  */
 export function Dialog({
   open,
@@ -30,6 +33,7 @@ export function Dialog({
   className,
   role = 'dialog',
   dismissible = true,
+  hideTitle = false,
 }: DialogProps) {
   const ref = useRef<HTMLDialogElement>(null)
   const titleId = useId()
@@ -38,7 +42,12 @@ export function Dialog({
   useEffect(() => {
     const element = ref.current
     if (element === null) return
-    if (open && !element.open) element.showModal()
+    if (open && !element.open) {
+      element.showModal()
+      // React's autoFocus runs before the dialog is shown, when nothing in it
+      // can take focus, so the element marked data-autofocus is focused here.
+      element.querySelector<HTMLElement>('[data-autofocus]')?.focus()
+    }
     if (!open && element.open) element.close()
   }, [open])
 
@@ -59,7 +68,7 @@ export function Dialog({
     >
       {open && (
         <div className="flex max-h-[85vh] flex-col">
-          <div className="flex flex-col gap-1.5 px-5 pt-5">
+          <div className={cn('flex flex-col gap-1.5 px-5 pt-5', hideTitle && 'sr-only')}>
             <h2 id={titleId} className="text-base font-semibold">
               {title}
             </h2>
@@ -70,7 +79,11 @@ export function Dialog({
             )}
           </div>
           {children !== undefined && (
-            <div className="min-h-0 overflow-y-auto px-5 pt-4">{children}</div>
+            // relative: visually hidden inputs (sr-only) are placed inside the
+            // scrolling area, not against the dialog, so the dialog never scrolls too.
+            <div className={cn('relative min-h-0 overflow-y-auto', !hideTitle && 'px-5 pt-4')}>
+              {children}
+            </div>
           )}
           {footer !== undefined && (
             <div className="flex flex-wrap justify-end gap-2 px-5 pt-5 pb-5">{footer}</div>

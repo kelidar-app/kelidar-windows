@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
+import { resolveHostSettings } from '@shared/groups'
 import type { HostView, ParsedHostSaveRequest } from '@shared/hosts'
-import { DEFAULT_SSH_PORT, type AuthRef, type HostRecord, type Id } from '@shared/records'
+import type { AuthRef, HostRecord, Id } from '@shared/records'
 import { AppError } from '../ipc/app-error'
 import type { Credential, UsedCredential } from '../ssh/auth'
 import { describePublicKey, inspectPrivateKey } from '../ssh/keys'
@@ -9,7 +10,7 @@ import type { VaultService } from '../vault/service'
 import type { VaultData } from '../vault/vault'
 import type { KeyFileImports, PendingKeyFile } from './key-files'
 
-function live(record: { deletedAt?: string | undefined }): boolean {
+export function live(record: { deletedAt?: string | undefined }): boolean {
   return record.deletedAt === undefined
 }
 
@@ -63,17 +64,39 @@ export function toHostView(data: VaultData, host: HostRecord): HostView {
             hasPassphrase: key.passphraseSecretId !== undefined,
           }
   }
+  const groups = data.groups.filter(live)
+  const groupId = groups.some((group) => group.id === host.groupId) ? host.groupId : undefined
+  const effective = resolveHostSettings({ ...host, groupId }, groups)
   return {
     id: host.id,
     name: host.name,
     address: host.address,
-    port: host.port ?? DEFAULT_SSH_PORT,
+    port: effective.port.value,
+    ...(host.port === undefined ? {} : { ownPort: host.port }),
     username: host.username ?? '',
+    ...(groupId === undefined ? {} : { groupId }),
+    tags: host.tags,
+    ...(host.color === undefined ? {} : { color: host.color }),
+    ...(effective.environment.value === undefined
+      ? {}
+      : { environment: effective.environment.value }),
+    ...(host.environment === undefined ? {} : { ownEnvironment: host.environment }),
+    favorite: host.favorite === true,
     signIn,
     createdAt: host.createdAt,
     updatedAt: host.updatedAt,
     ...(host.lastConnectedAt === undefined ? {} : { lastConnectedAt: host.lastConnectedAt }),
   }
+}
+
+/** Sets an optional field, or removes it when the value is undefined. */
+function setOptional<K extends 'port' | 'groupId' | 'color' | 'environment'>(
+  host: HostRecord,
+  key: K,
+  value: HostRecord[K],
+): void {
+  if (value === undefined) Reflect.deleteProperty(host, key)
+  else host[key] = value
 }
 
 /** Checks a new key file (and its passphrase) before anything is saved. */
@@ -114,6 +137,12 @@ export class HostService {
         ? undefined
         : before.hosts.find((host) => host.id === request.id && live(host))
     if (request.id !== undefined && existing === undefined) throw new AppError('HOST_NOT_FOUND')
+    if (
+      request.groupId !== undefined &&
+      !before.groups.some((group) => group.id === request.groupId && live(group))
+    ) {
+      throw new AppError('GROUP_NOT_FOUND')
+    }
 
     // "Use the sign-in from this connection" becomes a password or a key file.
     let auth: Exclude<ParsedHostSaveRequest['auth'], { type: 'fromSession' }>
@@ -213,28 +242,50 @@ export class HostService {
         address: request.address,
         username: request.username,
         auth: nextAuth,
+        tags: request.tags ?? [],
       }
-      if (current === undefined) {
-        const host: HostRecord = {
-          id: randomUUID(),
-          createdAt: now,
-          updatedAt: now,
-          tags: [],
-          ...fields,
-          ...(request.port === undefined ? {} : { port: request.port }),
-        }
-        data.hosts.push(host)
-        return toHostView(data, host)
+      const host: HostRecord = current ?? {
+        id: randomUUID(),
+        createdAt: now,
+        updatedAt: now,
+        ...fields,
       }
-      Object.assign(current, fields, { updatedAt: now })
-      if (request.port === undefined) delete current.port
-      else current.port = request.port
-      return toHostView(data, current)
+      Object.assign(host, fields, { updatedAt: now })
+      setOptional(host, 'port', request.port)
+      setOptional(host, 'groupId', request.groupId)
+      setOptional(host, 'color', request.color)
+      setOptional(host, 'environment', request.environment)
+      if (current === undefined) data.hosts.push(host)
+      return toHostView(data, host)
     })
     if (auth.type === 'key' && auth.keyFileToken !== undefined) {
       this.keyFiles.discard(auth.keyFileToken)
     }
     return saved
+  }
+
+  async setFavorite(id: Id, favorite: boolean): Promise<HostView> {
+    const vault = await this.vaults.get()
+    return vault.update((data) => {
+      const host = data.hosts.find((item) => item.id === id && live(item))
+      if (host === undefined) throw new AppError('HOST_NOT_FOUND')
+      if (favorite) host.favorite = true
+      else delete host.favorite
+      host.updatedAt = this.now().toISOString()
+      return toHostView(data, host)
+    })
+  }
+
+  /**
+   * Remembers when a session to the host was last ready, for "Recent".
+   * Not an edit, so updatedAt stays.
+   */
+  async markConnected(id: Id): Promise<void> {
+    const vault = await this.vaults.get()
+    await vault.update((data) => {
+      const host = data.hosts.find((item) => item.id === id && live(item))
+      if (host !== undefined) host.lastConnectedAt = this.now().toISOString()
+    })
   }
 
   async delete(id: Id): Promise<void> {
@@ -278,7 +329,7 @@ export class HostService {
       hostId: host.id,
       title: host.name,
       address: host.address,
-      port: host.port ?? DEFAULT_SSH_PORT,
+      port: toHostView(data, host).port,
       username: host.username ?? '',
       credential,
     }

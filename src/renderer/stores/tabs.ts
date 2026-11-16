@@ -9,6 +9,7 @@ import type {
 } from '@shared/session'
 import { api } from '@renderer/lib/api'
 import { forgetSession, startSessionEvents } from '@renderer/lib/session-events'
+import { useHostsStore } from './hosts'
 
 export const HOME_TAB = 'home'
 
@@ -221,8 +222,14 @@ export function startTabs(): void {
       }
       return
     }
+    const tab = tabs.find((item) => item.sessionId === event.sessionId)
+    if (event.state === 'ready' && tab?.state !== 'ready' && tab?.source.kind === 'host') {
+      useHostsStore.getState().markConnected(tab.source.hostId)
+    }
     useTabsStore.setState({
-      tabs: tabs.map((tab) => (tab.sessionId === event.sessionId ? applyEvent(tab, event) : tab)),
+      tabs: tabs.map((item) =>
+        item.sessionId === event.sessionId ? applyEvent(item, event) : item,
+      ),
     })
   })
 }

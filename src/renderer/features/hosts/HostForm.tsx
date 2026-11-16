@@ -3,16 +3,33 @@ import { useId, useState, type SyntheticEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { normalizeAddress } from '@shared/address'
 import type { ErrorCode } from '@shared/errors'
-import { usernameSchema, type HostSaveRequest, type KeyFileInfo } from '@shared/hosts'
-import { DEFAULT_SSH_PORT, MAX_PORT } from '@shared/records'
+import { groupDefaultsFor } from '@shared/groups'
+import {
+  splitTags,
+  tagListSchema,
+  usernameSchema,
+  type HostSaveRequest,
+  type KeyFileInfo,
+} from '@shared/hosts'
+import {
+  DEFAULT_SSH_PORT,
+  ENVIRONMENTS,
+  MAX_PORT,
+  MAX_TAGS,
+  type ColorId,
+  type Environment,
+} from '@shared/records'
 import { Button } from '@renderer/components/ui/button'
 import { ChoiceGroup } from '@renderer/components/ui/choice-group'
 import { Dialog } from '@renderer/components/ui/dialog'
 import { Field } from '@renderer/components/ui/field'
 import { Input } from '@renderer/components/ui/input'
+import { Select } from '@renderer/components/ui/select'
 import { api } from '@renderer/lib/api'
 import { useHostFormStore, useHostsStore, type HostFormState } from '@renderer/stores/hosts'
 import { useTabsStore } from '@renderer/stores/tabs'
+import { ColorPicker } from './ColorPicker'
+import { GroupOptions } from './GroupForm'
 
 type Method = 'password' | 'key'
 
@@ -55,6 +72,7 @@ function HostForm({
 }) {
   const { t } = useTranslation()
   const save = useHostsStore((state) => state.save)
+  const groups = useHostsStore((state) => state.groups)
   const adoptHost = useTabsStore((state) => state.adoptHost)
   const editing = form.mode === 'edit' ? form.host : undefined
   const prefill = form.mode === 'new' ? form.prefill : undefined
@@ -72,13 +90,30 @@ function HostForm({
   const [forgetPassword, setForgetPassword] = useState(false)
   const [keyFile, setKeyFile] = useState<KeyFileInfo | null>(null)
   const [passphrase, setPassphrase] = useState('')
-  const initialPort = editing?.port ?? prefill?.port ?? DEFAULT_SSH_PORT
-  const [port, setPort] = useState(initialPort === DEFAULT_SSH_PORT ? '' : String(initialPort))
-  const [showMore, setShowMore] = useState(initialPort !== DEFAULT_SSH_PORT)
+  const initialPort =
+    editing === undefined
+      ? prefill?.port === DEFAULT_SSH_PORT
+        ? undefined
+        : prefill?.port
+      : editing.ownPort
+  const [port, setPort] = useState(initialPort === undefined ? '' : String(initialPort))
+  const [groupId, setGroupId] = useState(editing?.groupId ?? prefill?.groupId ?? '')
+  const [environment, setEnvironment] = useState<Environment | ''>(editing?.ownEnvironment ?? '')
+  const [tags, setTags] = useState(editing?.tags.join(' ') ?? '')
+  const [color, setColor] = useState<ColorId | undefined>(editing?.color)
+  const [showMore, setShowMore] = useState(
+    initialPort !== undefined ||
+      (editing?.groupId ?? prefill?.groupId) !== undefined ||
+      editing?.ownEnvironment !== undefined ||
+      (editing?.tags.length ?? 0) > 0 ||
+      editing?.color !== undefined,
+  )
+  const inherited = groupDefaultsFor(groupId === '' ? undefined : groupId, groups)
   const [errors, setErrors] = useState<{
     address?: string
     username?: string
     port?: string
+    tags?: string
     key?: string
     passphrase?: string
     form?: string
@@ -146,8 +181,13 @@ function HostForm({
       next.port = t('hostForm.portInvalid', { max: MAX_PORT })
       setShowMore(true)
     }
+    const parsedTags = tagListSchema.safeParse(splitTags(tags))
+    if (!parsedTags.success) {
+      next.tags = t('hostForm.tagsInvalid', { max: MAX_TAGS })
+      setShowMore(true)
+    }
     setErrors(next)
-    if (Object.keys(next).length > 0 || cleanAddress === null) return
+    if (Object.keys(next).length > 0 || cleanAddress === null || !parsedTags.success) return
     const auth = buildAuth()
     if (auth === null) return
 
@@ -156,7 +196,11 @@ function HostForm({
       ...(editing === undefined ? {} : { id: editing.id }),
       name: name.trim() === '' ? cleanAddress : name.trim(),
       address: cleanAddress,
-      ...(portNumber === undefined || portNumber === DEFAULT_SSH_PORT ? {} : { port: portNumber }),
+      ...(portNumber === undefined ? {} : { port: portNumber }),
+      ...(groupId === '' ? {} : { groupId }),
+      tags: parsedTags.data,
+      ...(color === undefined ? {} : { color }),
+      ...(environment === '' ? {} : { environment }),
       username: username.trim(),
       auth,
     })
@@ -208,6 +252,7 @@ function HostForm({
             value={address}
             required
             autoFocus
+            data-autofocus
             spellCheck={false}
             autoComplete="off"
             placeholder="server.example.com"
@@ -382,15 +427,38 @@ function HostForm({
           />
           {t('hostForm.moreOptions')}
         </button>
-        <div id={moreId} hidden={!showMore}>
-          <Field label={t('hostForm.port')} error={errors.port ?? null}>
+        <div id={moreId} hidden={!showMore} className="flex flex-col gap-4">
+          <Field label={t('hostForm.group')}>
+            {({ id, describedBy }) => (
+              <Select
+                id={id}
+                value={groupId}
+                aria-describedby={describedBy}
+                onChange={(event) => {
+                  setGroupId(event.target.value)
+                }}
+              >
+                <option value="">{t('hostForm.groupNone')}</option>
+                <GroupOptions groups={groups} />
+              </Select>
+            )}
+          </Field>
+          <Field
+            label={t('hostForm.port')}
+            hint={
+              inherited.port.source.from === 'group'
+                ? t('hostForm.portInheritHint', { port: inherited.port.value })
+                : undefined
+            }
+            error={errors.port ?? null}
+          >
             {({ id, describedBy, invalid }) => (
               <Input
                 id={id}
                 dir="ltr"
                 inputMode="numeric"
                 value={port}
-                placeholder={String(DEFAULT_SSH_PORT)}
+                placeholder={String(inherited.port.value)}
                 aria-invalid={invalid}
                 aria-describedby={describedBy}
                 className="w-32 font-mono"
@@ -400,6 +468,54 @@ function HostForm({
               />
             )}
           </Field>
+          <Field label={t('hostForm.environment')} hint={t('hostForm.environmentHint')}>
+            {({ id, describedBy }) => (
+              <Select
+                id={id}
+                value={environment}
+                aria-describedby={describedBy}
+                className="w-56"
+                onChange={(event) => {
+                  const value = event.target.value
+                  setEnvironment(ENVIRONMENTS.find((item) => item === value) ?? '')
+                }}
+              >
+                <option value="">
+                  {inherited.environment.value === undefined
+                    ? t('hostForm.environmentNone')
+                    : t('hostForm.environmentInherit', {
+                        value: t(`environments.${inherited.environment.value}`),
+                      })}
+                </option>
+                {ENVIRONMENTS.map((item) => (
+                  <option key={item} value={item}>
+                    {t(`environments.${item}`)}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          <Field
+            label={t('hostForm.tags')}
+            hint={t('hostForm.tagsHint')}
+            error={errors.tags ?? null}
+          >
+            {({ id, describedBy, invalid }) => (
+              <Input
+                id={id}
+                value={tags}
+                spellCheck={false}
+                autoComplete="off"
+                placeholder={t('hostForm.tagsPlaceholder')}
+                aria-invalid={invalid}
+                aria-describedby={describedBy}
+                onChange={(event) => {
+                  setTags(event.target.value)
+                }}
+              />
+            )}
+          </Field>
+          <ColorPicker legend={t('hostForm.color')} value={color} onChange={setColor} />
         </div>
       </div>
 

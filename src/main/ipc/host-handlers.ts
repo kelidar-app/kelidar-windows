@@ -1,3 +1,4 @@
+import type { GroupService } from '../hosts/group-service'
 import type { HostService } from '../hosts/host-service'
 import type { KeyFileImports } from '../hosts/key-files'
 import type { UsedCredential } from '../ssh/auth'
@@ -5,6 +6,7 @@ import type { InvokeEventLike, IpcRouter } from './router'
 
 export interface HostHandlerDeps<E extends InvokeEventLike> {
   hosts: HostService
+  groups: GroupService
   keyFiles: KeyFileImports
   /** Shows the native open dialog for the window that sent `event`. */
   chooseKeyFile: (event: E) => Promise<string | null>
@@ -27,6 +29,13 @@ export function registerHostHandlers<E extends InvokeEventLike>(
   })
   router.handle('hosts:delete', async ({ id }) => {
     await deps.hosts.delete(id)
+    return undefined
+  })
+  router.handle('hosts:setFavorite', ({ id, favorite }) => deps.hosts.setFavorite(id, favorite))
+  router.handle('groups:list', () => deps.groups.list())
+  router.handle('groups:save', (request) => deps.groups.save(request))
+  router.handle('groups:delete', async ({ id }) => {
+    await deps.groups.delete(id)
     return undefined
   })
   router.handle('hosts:pickKeyFile', async (_payload, event) => {

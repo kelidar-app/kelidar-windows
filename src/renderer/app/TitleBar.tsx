@@ -1,4 +1,4 @@
-import { House, KeyRound, Plus, X } from 'lucide-react'
+import { House, KeyRound, Plus, Search, X } from 'lucide-react'
 import type { KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { SessionState } from '@shared/session'
@@ -30,6 +30,11 @@ const tabClass = (selected: boolean): string =>
 export function TitleBar() {
   const { t } = useTranslation()
   const focusQuickConnect = useUiStore((state) => state.focusQuickConnect)
+  const setPaletteOpen = useUiStore((state) => state.setPaletteOpen)
+  const paletteLabel = t('nav.withShortcut', {
+    label: t('palette.open'),
+    shortcut: SHORTCUTS.palette.label,
+  })
   const tabs = useTabsStore((state) => state.tabs)
   const activeId = useTabsStore((state) => state.activeId)
   const activate = useTabsStore((state) => state.activate)
@@ -72,6 +77,18 @@ export function TitleBar() {
           className="app-no-drag mb-1 flex size-7 shrink-0 items-center justify-center rounded-md hover:bg-muted"
         >
           <Plus aria-hidden className="size-4" />
+        </button>
+        <button
+          type="button"
+          aria-label={paletteLabel}
+          title={paletteLabel}
+          aria-keyshortcuts={SHORTCUTS.palette.aria}
+          onClick={() => {
+            setPaletteOpen(true)
+          }}
+          className="app-no-drag mb-1 flex size-7 shrink-0 items-center justify-center rounded-md hover:bg-muted"
+        >
+          <Search aria-hidden className="size-4" />
         </button>
       </div>
     </header>

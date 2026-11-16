@@ -56,6 +56,8 @@ export interface SessionManagerOptions {
   prompts: PromptBroker
   /** Receives state changes and error codes only, never data or secrets. */
   log?: (message: string) => void
+  /** A session to a saved host reached a shell (for "Recent"). */
+  onConnected?: (hostId: string) => void
   createClient?: () => Client
   timing?: Partial<SessionTiming>
 }
@@ -451,6 +453,9 @@ export class SessionManager {
           client.end()
         })
         this.setState(session, 'ready')
+        if (session.target.hostId !== undefined) {
+          this.options.onConnected?.(session.target.hostId)
+        }
       },
     )
   }

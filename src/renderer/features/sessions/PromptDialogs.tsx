@@ -38,7 +38,7 @@ function HostKeyDialog({ prompt }: { prompt: Extract<PromptRequest, { kind: 'hos
       })}
       footer={
         <>
-          <Button variant="outline" autoFocus onClick={reject}>
+          <Button variant="outline" autoFocus data-autofocus onClick={reject}>
             {t('common.cancel')}
           </Button>
           <Button
@@ -121,6 +121,7 @@ function SecretDialog({
               type="password"
               dir="ltr"
               autoFocus
+              data-autofocus
               autoComplete="off"
               value={value}
               onChange={(event) => {
@@ -190,6 +191,7 @@ function KeyboardDialog({
                 type={question.echo ? 'text' : 'password'}
                 dir="ltr"
                 autoFocus={index === 0}
+                data-autofocus={index === 0 ? '' : undefined}
                 autoComplete="off"
                 value={values[index] ?? ''}
                 onChange={(event) => {

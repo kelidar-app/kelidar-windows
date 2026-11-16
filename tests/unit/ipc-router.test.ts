@@ -62,6 +62,7 @@ describe('IPC router', () => {
       language: 'en' as const,
       theme: 'system' as const,
       terminalTheme: 'kelidar' as const,
+      hostsView: 'cards' as const,
     }))
     const versionHandler = vi.fn(() => ({ version: '1.2.3' }))
     router.handle('settings:update', handler)
@@ -87,6 +88,7 @@ describe('IPC router', () => {
       language: 'fa' as const,
       theme: 'dark' as const,
       terminalTheme: 'soft' as const,
+      hostsView: 'cards' as const,
     }))
     router.handle('settings:update', handler)
     await call('settings:update', trusted, { theme: 'dark' })
@@ -100,13 +102,14 @@ describe('IPC router', () => {
         language: 'en' as const,
         theme: 'light' as const,
         terminalTheme: 'classic' as const,
+        hostsView: 'cards' as const,
         window: { width: 1 },
       }
       return withExtra
     })
     await expect(call('settings:get', trusted)).resolves.toEqual({
       ok: true,
-      data: { language: 'en', theme: 'light', terminalTheme: 'classic' },
+      data: { language: 'en', theme: 'light', terminalTheme: 'classic', hostsView: 'cards' },
     })
   })
 

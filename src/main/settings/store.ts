@@ -24,7 +24,13 @@ export interface SettingsStoreOptions {
 }
 
 function defaults(language: Language): SettingsFile {
-  return { version: SETTINGS_VERSION, language, theme: 'system', terminalTheme: 'kelidar' }
+  return {
+    version: SETTINGS_VERSION,
+    language,
+    theme: 'system',
+    terminalTheme: 'kelidar',
+    hostsView: 'cards',
+  }
 }
 
 function isMissingFile(error: unknown): boolean {
@@ -109,6 +115,7 @@ export class SettingsStore {
       language: this.current.language,
       theme: this.current.theme,
       terminalTheme: this.current.terminalTheme,
+      hostsView: this.current.hostsView,
     }
   }
 

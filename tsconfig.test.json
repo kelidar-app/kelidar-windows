@@ -6,13 +6,20 @@
     "emitDeclarationOnly": true,
     "outDir": "./node_modules/.cache/tsc/test",
     "lib": ["ES2023", "DOM"],
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "@shared/*": ["./src/shared/*"],
+      "@renderer/*": ["./src/renderer/*"]
+    }
   },
   "include": [
     "tests/**/*",
     "src/main/**/*",
     "src/shared/**/*",
     "src/renderer/i18n/*.json",
-    "src/renderer/features/terminal/themes.ts"
+    "src/renderer/features/terminal/themes.ts",
+    "src/renderer/features/hosts/host-search.ts",
+    "src/renderer/lib/fuzzy.ts",
+    "src/renderer/app/key-combos.ts"
   ]
 }

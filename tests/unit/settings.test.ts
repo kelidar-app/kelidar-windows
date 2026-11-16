@@ -72,33 +72,56 @@ describe('SettingsStore', () => {
 
   it('creates the file with defaults on first run', async () => {
     const store = await SettingsStore.open({ directory: dir, defaultLanguage: 'fa' })
-    expect(store.getUi()).toEqual({ language: 'fa', theme: 'system', terminalTheme: 'kelidar' })
+    expect(store.getUi()).toEqual({
+      language: 'fa',
+      theme: 'system',
+      terminalTheme: 'kelidar',
+      hostsView: 'cards',
+    })
     expect(await readJson()).toEqual({
       version: SETTINGS_VERSION,
       language: 'fa',
       theme: 'system',
       terminalTheme: 'kelidar',
+      hostsView: 'cards',
     })
   })
 
   it('loads an existing file', async () => {
     await writeFile(
       file,
-      JSON.stringify({ version: 2, language: 'fa', theme: 'dark', terminalTheme: 'soft' }),
+      JSON.stringify({
+        version: 2,
+        language: 'fa',
+        theme: 'dark',
+        terminalTheme: 'soft',
+        hostsView: 'cards',
+      }),
     )
     const store = await SettingsStore.open({ directory: dir, defaultLanguage: 'en' })
-    expect(store.getUi()).toEqual({ language: 'fa', theme: 'dark', terminalTheme: 'soft' })
+    expect(store.getUi()).toEqual({
+      language: 'fa',
+      theme: 'dark',
+      terminalTheme: 'soft',
+      hostsView: 'cards',
+    })
   })
 
-  it('migrates a version 1 file and saves it as version 2', async () => {
+  it('migrates a version 1 file and saves it as version 3', async () => {
     await writeFile(file, JSON.stringify({ version: 1, language: 'fa', theme: 'dark' }))
     const store = await SettingsStore.open({ directory: dir, defaultLanguage: 'en' })
-    expect(store.getUi()).toEqual({ language: 'fa', theme: 'dark', terminalTheme: 'kelidar' })
-    expect(await readJson()).toEqual({
-      version: 2,
+    expect(store.getUi()).toEqual({
       language: 'fa',
       theme: 'dark',
       terminalTheme: 'kelidar',
+      hostsView: 'cards',
+    })
+    expect(await readJson()).toEqual({
+      version: 3,
+      language: 'fa',
+      theme: 'dark',
+      terminalTheme: 'kelidar',
+      hostsView: 'cards',
     })
   })
 
@@ -109,13 +132,15 @@ describe('SettingsStore', () => {
       language: 'en',
       theme: 'light',
       terminalTheme: 'kelidar',
+      hostsView: 'cards',
     })
-    await store.updateUi({ language: 'fa', terminalTheme: 'contrast' })
+    await store.updateUi({ language: 'fa', terminalTheme: 'contrast', hostsView: 'cards' })
     expect(await readJson()).toEqual({
-      version: 2,
+      version: 3,
       language: 'fa',
       theme: 'light',
       terminalTheme: 'contrast',
+      hostsView: 'cards',
       window: { width: 1000, height: 700, x: 10, y: 20, maximized: false },
     })
     expect((await readdir(dir)).filter((name) => name.endsWith('.tmp'))).toEqual([])
@@ -130,10 +155,11 @@ describe('SettingsStore', () => {
     ])
     await store.flush()
     expect(await readJson()).toEqual({
-      version: 2,
+      version: 3,
       language: 'fa',
       theme: 'light',
       terminalTheme: 'kelidar',
+      hostsView: 'cards',
     })
   })
 
@@ -141,7 +167,12 @@ describe('SettingsStore', () => {
     const onWarning = vi.fn()
     await writeFile(file, '{ this is not json')
     const store = await SettingsStore.open({ directory: dir, defaultLanguage: 'en', onWarning })
-    expect(store.getUi()).toEqual({ language: 'en', theme: 'system', terminalTheme: 'kelidar' })
+    expect(store.getUi()).toEqual({
+      language: 'en',
+      theme: 'system',
+      terminalTheme: 'kelidar',
+      hostsView: 'cards',
+    })
     const names = await readdir(dir)
     expect(names.some((name) => name.startsWith(`${SETTINGS_FILE_NAME}.broken-`))).toBe(true)
     expect(onWarning).toHaveBeenCalledOnce()
@@ -150,7 +181,12 @@ describe('SettingsStore', () => {
   it('treats a file with invalid values as broken', async () => {
     await writeFile(file, JSON.stringify({ version: 1, language: 'de', theme: 'dark' }))
     const store = await SettingsStore.open({ directory: dir, defaultLanguage: 'en' })
-    expect(store.getUi()).toEqual({ language: 'en', theme: 'system', terminalTheme: 'kelidar' })
+    expect(store.getUi()).toEqual({
+      language: 'en',
+      theme: 'system',
+      terminalTheme: 'kelidar',
+      hostsView: 'cards',
+    })
   })
 
   it('never overwrites a file written by a newer version', async () => {
