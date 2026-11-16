@@ -1,9 +1,10 @@
 import net from 'node:net'
-import { Server, utils } from 'ssh2'
+import { Server } from 'ssh2'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { HostView } from '../../src/shared/hosts'
 import type { SessionOpenResponse } from '../../src/shared/session'
 import { createHarness, waitFor, type Harness } from './helpers/harness'
+import { readableKeyPair } from '../unit/helpers/keys'
 
 const cleanups: (() => Promise<void> | void)[] = []
 afterEach(async () => {
@@ -81,7 +82,7 @@ describe('connection failures map to clear error codes', () => {
     const h = await setup()
     const server = new Server(
       {
-        hostKeys: [utils.generateKeyPairSync('ed25519').private],
+        hostKeys: [readableKeyPair('ed25519').private],
         // An old key exchange the client does not offer by default.
         algorithms: { kex: ['diffie-hellman-group1-sha1'] },
       },

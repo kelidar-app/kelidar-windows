@@ -1,11 +1,11 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { utils } from 'ssh2'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { HostView } from '../../src/shared/hosts'
 import type { SessionOpenResponse } from '../../src/shared/session'
 import { createHarness, FakeSink, waitFor, type Harness } from './helpers/harness'
 import { startTestServer } from './helpers/ssh-server'
+import { readableKeyPair } from '../unit/helpers/keys'
 
 const PASSWORD = 'quick-Pw-90210'
 const PASSPHRASE = 'quick-Phrase-31337'
@@ -77,7 +77,7 @@ describe('Quick Connect', () => {
 
   it('asks for the passphrase of an encrypted -i key and saves the key', async () => {
     const h = await setup()
-    const pair = utils.generateKeyPairSync('ed25519', {
+    const pair = readableKeyPair('ed25519', {
       passphrase: PASSPHRASE,
       cipher: 'aes256-ctr',
       rounds: 16,

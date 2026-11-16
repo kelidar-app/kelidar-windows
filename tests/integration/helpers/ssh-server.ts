@@ -9,6 +9,7 @@ import {
   type PseudoTtyInfo,
   type ServerChannel,
 } from 'ssh2'
+import { readableKeyPair } from '../../unit/helpers/keys'
 
 export interface TestServerOptions {
   username?: string
@@ -51,7 +52,7 @@ function same(a: string, b: string): boolean {
  */
 export async function startTestServer(options: TestServerOptions = {}): Promise<TestServer> {
   const username = options.username ?? 'tester'
-  const hostKey = options.hostKey ?? utils.generateKeyPairSync('ed25519').private
+  const hostKey = options.hostKey ?? readableKeyPair('ed25519').private
   const authorized: ParsedKey | undefined =
     options.authorizedKey === undefined
       ? undefined

@@ -1,7 +1,6 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import { utils } from 'ssh2'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { HostService } from '../../src/main/hosts/host-service'
 import { KeyFileImports, MAX_KEY_FILE_BYTES } from '../../src/main/hosts/key-files'
@@ -11,6 +10,7 @@ import { formatTarget, normalizeAddress } from '../../src/shared/address'
 import { hostSaveRequestSchema, type HostSaveRequest } from '../../src/shared/hosts'
 import { ipcContract } from '../../src/shared/ipc'
 import { fakeWrapper } from './helpers/fake-wrapper'
+import { readableKeyPair } from './helpers/keys'
 
 describe('normalizeAddress', () => {
   it('accepts host names, IPv4 and IPv6', () => {
@@ -104,8 +104,8 @@ describe('HostService', () => {
   const writeKey = async (options: { passphrase?: string } = {}) => {
     const pair =
       options.passphrase === undefined
-        ? utils.generateKeyPairSync('ed25519')
-        : utils.generateKeyPairSync('ed25519', {
+        ? readableKeyPair('ed25519')
+        : readableKeyPair('ed25519', {
             passphrase: options.passphrase,
             cipher: 'aes256-ctr',
             rounds: 16,
@@ -218,7 +218,7 @@ describe('HostService', () => {
   })
 
   it('refuses files that are not private keys', async () => {
-    const pair = utils.generateKeyPairSync('ed25519')
+    const pair = readableKeyPair('ed25519')
     const publicFile = path.join(dir, 'id.pub')
     await writeFile(publicFile, pair.public)
     await expect(keyFiles.import(publicFile)).rejects.toMatchObject({ code: 'KEY_INVALID' })

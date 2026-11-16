@@ -1,11 +1,11 @@
 import { readdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
-import { utils } from 'ssh2'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HostView } from '../../src/shared/hosts'
 import type { SessionOpenResponse, SessionState } from '../../src/shared/session'
 import { createHarness, FakeSink, waitFor, type Harness } from './helpers/harness'
 import { startDropProxy, startTestServer, type TestServer } from './helpers/ssh-server'
+import { readableKeyPair } from '../unit/helpers/keys'
 
 const PASSWORD = 'pw-Zebra-7781-secret'
 const PASSPHRASE = 'phrase-Otter-4412-secret'
@@ -102,7 +102,7 @@ describe('sessions against an in-process ssh2 server', () => {
   })
 
   it('signs in with an ed25519 key protected by a passphrase', async () => {
-    const pair = utils.generateKeyPairSync('ed25519', {
+    const pair = readableKeyPair('ed25519', {
       passphrase: PASSPHRASE,
       cipher: 'aes256-ctr',
       rounds: 16,
@@ -336,7 +336,7 @@ describe('sessions against an in-process ssh2 server', () => {
     const consoleSpies = (['log', 'info', 'warn', 'error', 'debug'] as const).map((method) =>
       vi.spyOn(console, method),
     )
-    const pair = utils.generateKeyPairSync('ed25519', {
+    const pair = readableKeyPair('ed25519', {
       passphrase: PASSPHRASE,
       cipher: 'aes256-ctr',
       rounds: 16,
