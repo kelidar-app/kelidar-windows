@@ -18,6 +18,16 @@ updates:
         dependency-type: development
         update-types: [minor, patch]
         exclude-patterns: ['electron']
+    ignore:
+      # typescript-eslint supports TypeScript below 6.1 only, so a TypeScript 7
+      # bump breaks `npm ci` (ERESOLVE). Remove this once typescript-eslint's
+      # peer range includes 7.
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
+      # Match the Node.js inside Electron (Node 24 in Electron 45), not the
+      # newest Node. Raise it by hand when Electron moves to a new Node major.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
 
   - package-ecosystem: github-actions
     directory: /
