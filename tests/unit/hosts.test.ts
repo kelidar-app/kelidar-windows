@@ -69,7 +69,8 @@ describe('hosts:save schema', () => {
       { ...valid, extra: true },
       { ...valid, auth: { type: 'password', password: 'x', secretId: 'y' } },
       { ...valid, auth: { type: 'key', keyFileToken: '../../etc/passwd' } },
-      { ...valid, auth: { type: 'agent' } },
+      { ...valid, auth: { type: 'identity' } },
+      { ...valid, auth: { type: 'savedKey', keyId: 'x' } },
     ]
     for (const item of bad) expect(hostSaveRequestSchema.safeParse(item).success).toBe(false)
   })
@@ -244,7 +245,7 @@ describe('HostService', () => {
     ).rejects.toMatchObject({ code: 'KEY_REQUIRED' })
   })
 
-  it('switching from key to password retires the key and its secrets', async () => {
+  it('switching from key to password keeps the key in the Keychain and its secret', async () => {
     const { file } = await writeKey()
     const info = await keyFiles.import(file)
     const { id } = await save({
@@ -260,11 +261,11 @@ describe('HostService', () => {
       username: 'u',
       auth: { type: 'password', password: 'pw' },
     })
+    // Keys belong to the Keychain now: other hosts may use them, so only the
+    // Keychain deletes them.
     const data = await vaultData()
-    expect(data.keys[0]?.deletedAt).toEqual(expect.any(String))
-    expect(data.secrets.filter((s) => s.deletedAt === undefined).map((s) => s.value)).toEqual([
-      'pw',
-    ])
+    expect(data.keys[0]?.deletedAt).toBeUndefined()
+    expect(data.secrets.filter((s) => s.deletedAt === undefined)).toHaveLength(2)
   })
 
   it('deletes a host with a tombstone and wipes its secret', async () => {

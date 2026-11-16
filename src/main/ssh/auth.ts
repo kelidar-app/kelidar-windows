@@ -1,6 +1,7 @@
 import type {
   AuthenticationType,
   AuthHandlerMiddleware,
+  BaseAgent,
   KeyboardInteractiveCallback,
   NextAuthHandler,
   Prompt,
@@ -10,6 +11,8 @@ import type {
 export type Credential =
   | { type: 'password'; password: string }
   | { type: 'ask' }
+  /** The keys in the Windows OpenSSH agent or Pageant. */
+  | { type: 'agent' }
   | {
       type: 'key'
       privateKey: string
@@ -37,6 +40,20 @@ export interface AuthCallbacks {
   onTry: (used: UsedCredential | null) => void
 }
 
+export interface AuthOptions {
+  /** Required for agent sign-in. */
+  agent?: BaseAgent | undefined
+  /**
+   * Try only the given credential: no password questions and no
+   * keyboard-interactive. Used to test a new key before switching to it.
+   */
+  strict?: boolean
+}
+
+/** Server questions that ask for a one-time code: never answered with the saved password. */
+const ONE_TIME_CODE =
+  /verification|one[- ]?time|otp|token|authenticat|2fa|two[- ]?factor|\bcode\b|کد|رمز یک‌بار/i
+
 export const MAX_PASSWORD_ATTEMPTS = 3
 
 /**
@@ -57,8 +74,11 @@ export function createAuthHandler(
   username: string,
   credential: Credential,
   callbacks: AuthCallbacks,
+  options: AuthOptions = {},
 ): AuthHandlerMiddleware {
   let keyTried = false
+  let agentTried = false
+  let lastMethod: AuthenticationType | null = null
   let passwordTries = 0
   let keyboardTries = 0
   let password: string | undefined =
@@ -78,7 +98,13 @@ export function createAuthHandler(
       return
     }
     const only = prompts[0]
-    if (prompts.length === 1 && only !== undefined && !only.echo && password !== undefined) {
+    if (
+      prompts.length === 1 &&
+      only !== undefined &&
+      !only.echo &&
+      password !== undefined &&
+      !ONE_TIME_CODE.test(`${name} ${instructions} ${only.prompt}`)
+    ) {
       const answer = password
       // Use a remembered password once; a second question means it was wrong.
       password = undefined
@@ -105,7 +131,10 @@ export function createAuthHandler(
       })
   }
 
-  return (methodsLeft: AuthenticationType[] | null, _partial: boolean, next: NextAuthHandler) => {
+  return (methodsLeft: AuthenticationType[] | null, partial: boolean, next: NextAuthHandler) => {
+    // The password was accepted but the server wants more: the next
+    // keyboard-interactive question is a second factor, so it goes to the user.
+    if (partial && lastMethod === 'password') password = undefined
     // ssh2 passes null on the first call, before the server has listed methods.
     const allowed = (method: AuthenticationType): boolean =>
       methodsLeft === null || methodsLeft.includes(method)
@@ -131,9 +160,20 @@ export function createAuthHandler(
         })
         return
       }
+      if (credential.type === 'agent' && !agentTried && options.agent !== undefined) {
+        agentTried = true
+        callbacks.onTry(null)
+        next({ type: 'agent', username, agent: options.agent })
+        return
+      }
+      if (options.strict === true) {
+        noMoreMethods(next)
+        return
+      }
       if (credential.type === 'password' && passwordTries === 0 && allowed('password')) {
         passwordTries++
         callbacks.onTry(credential)
+        lastMethod = 'password'
         next({ type: 'password', username, password: credential.password })
         return
       }

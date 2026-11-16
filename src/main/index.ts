@@ -6,13 +6,19 @@ import { pickDefaultLanguage, type Theme } from '@shared/settings'
 import { configureAppPaths } from './app-paths'
 import { GroupService } from './hosts/group-service'
 import { HostService } from './hosts/host-service'
+import { KeyUpgrades } from './hosts/key-upgrade'
 import { KeyFileImports } from './hosts/key-files'
 import { registerIpcHandlers } from './ipc/handlers'
 import { registerHostHandlers } from './ipc/host-handlers'
+import { registerKeychainHandlers } from './ipc/keychain-handlers'
 import { registerSessionHandlers } from './ipc/session-handlers'
 import { createSinkRegistry } from './ipc/web-contents-sink'
 import { createIpcRouter } from './ipc/router'
 import { createOriginMatcher, createSenderCheck } from './ipc/sender'
+import { Agents } from './keychain/agents'
+import { IdentityService } from './keychain/identity-service'
+import { KeyService } from './keychain/key-service'
+import { countAgentKeys, openSshAgent, PageantAgent, pagentExePath } from './platform/agent'
 import { applyWindowsAppIdentity } from './platform/windows'
 import { handleAppProtocol, registerAppScheme } from './security/app-protocol'
 import { applyDevelopmentCsp, denyAllPermissions, denyNavigationAndPopups } from './security/harden'
@@ -101,6 +107,17 @@ async function start(): Promise<void> {
   const keyFiles = new KeyFileImports()
   const hosts = new HostService(vaults, keyFiles)
   const groups = new GroupService(vaults)
+  const keys = new KeyService(vaults, keyFiles)
+  const identities = new IdentityService(vaults, keyFiles)
+  const pagentPath = pagentExePath(app.getAppPath())
+  const agents = new Agents(
+    {
+      openssh: () => openSshAgent(),
+      pageant: () => new PageantAgent(pagentPath),
+      count: (agent) => countAgentKeys(agent),
+    },
+    () => settings.getUi().agent,
+  )
   const prompts = new PromptBroker()
   const knownHosts = new KnownHosts(vaults)
   const sessions = new SessionManager({
@@ -111,6 +128,7 @@ async function start(): Promise<void> {
     log: (message) => {
       console.log(`[ssh] ${message}`)
     },
+    agents,
     onConnected: (hostId) => {
       hosts.markConnected(hostId).catch((error: unknown) => {
         console.warn(`[hosts] could not record the connection: ${describeError(error)}`)
@@ -173,6 +191,20 @@ async function start(): Promise<void> {
         : dialog.showOpenDialog(owner, options))
       return result.canceled ? null : (result.filePaths[0] ?? null)
     },
+  })
+
+  registerKeychainHandlers(router, {
+    keys,
+    identities,
+    agents,
+    upgrades: new KeyUpgrades({
+      vaults,
+      hosts,
+      keys,
+      runCommand: (owner, target, command, options) =>
+        sessions.runCommand(owner, target, command, options),
+    }),
+    ownerOf: (event) => sinkOf(event.sender),
   })
 
   registerSessionHandlers(router, {

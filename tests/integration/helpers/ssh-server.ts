@@ -24,6 +24,13 @@ export interface TestServerOptions {
   port?: number
   /** Bytes the "big" command prints. */
   bigOutputBytes?: number
+  /**
+   * Two-factor sign-in: after the right password, the server asks this code
+   * as a keyboard-interactive question ("Verification code:").
+   */
+  otp?: string
+  /** Exit code of commands run over exec (default 0). */
+  execExitCode?: number
 }
 
 export interface TestServer {
@@ -37,6 +44,12 @@ export interface TestServer {
   received: string[]
   /** Open shells right now. */
   openShells: () => number
+  /** Commands run over exec, exactly as received. */
+  execs: string[]
+  /** Sessions that asked for agent forwarding. */
+  agentForwardRequests: () => number
+  /** Questions asked over keyboard-interactive. */
+  keyboardQuestions: string[]
   close: () => Promise<void>
 }
 
@@ -53,16 +66,17 @@ function same(a: string, b: string): boolean {
 export async function startTestServer(options: TestServerOptions = {}): Promise<TestServer> {
   const username = options.username ?? 'tester'
   const hostKey = options.hostKey ?? readableKeyPair('ed25519').private
-  const authorized: ParsedKey | undefined =
-    options.authorizedKey === undefined
-      ? undefined
-      : (() => {
-          const parsed = utils.parseKey(options.authorizedKey)
-          if (parsed instanceof Error || Array.isArray(parsed)) throw new Error('bad test key')
-          return parsed
-        })()
+  const parsePublic = (text: string): ParsedKey => {
+    const parsed = utils.parseKey(text)
+    if (parsed instanceof Error || Array.isArray(parsed)) throw new Error('bad test key')
+    return parsed
+  }
+  /** Keys allowed to sign in; an exec that writes authorized_keys adds to it. */
+  const authorizedKeys: ParsedKey[] =
+    options.authorizedKey === undefined ? [] : [parsePublic(options.authorizedKey)]
 
   let shells = 0
+  let agentForwards = 0
   const state: Omit<TestServer, 'port' | 'close'> = {
     hostKey,
     authAttempts: [],
@@ -71,9 +85,12 @@ export async function startTestServer(options: TestServerOptions = {}): Promise<
     connections: [],
     received: [],
     openShells: () => shells,
+    execs: [],
+    agentForwardRequests: () => agentForwards,
+    keyboardQuestions: [],
   }
 
-  const onAuth = (ctx: AuthContext): void => {
+  const onAuth = (ctx: AuthContext, connection: { passwordPassed: boolean }): void => {
     state.authAttempts.push({ method: ctx.method, username: ctx.username })
     const methods: AuthContext['method'][] = options.keyboardOnly
       ? ['keyboard-interactive']
@@ -83,13 +100,33 @@ export async function startTestServer(options: TestServerOptions = {}): Promise<
       return
     }
     if (ctx.method === 'password' && !options.keyboardOnly && options.password !== undefined) {
-      if (same(ctx.password, options.password)) ctx.accept()
-      else ctx.reject(methods)
+      if (!same(ctx.password, options.password)) ctx.reject(methods)
+      else if (options.otp === undefined) ctx.accept()
+      else {
+        // Right password, now the second factor.
+        connection.passwordPassed = true
+        ctx.reject(['keyboard-interactive'], true)
+      }
       return
     }
-    if (ctx.method === 'publickey' && authorized !== undefined) {
-      const keyMatches =
-        ctx.key.algo === authorized.type && ctx.key.data.equals(authorized.getPublicSSH())
+    if (ctx.method === 'keyboard-interactive' && options.otp !== undefined) {
+      if (!connection.passwordPassed) {
+        ctx.reject(methods)
+        return
+      }
+      const otp = options.otp
+      state.keyboardQuestions.push('Verification code: ')
+      ctx.prompt([{ prompt: 'Verification code: ', echo: false }], (answers) => {
+        if (answers[0] !== undefined && same(answers[0], otp)) ctx.accept()
+        else ctx.reject(['keyboard-interactive'])
+      })
+      return
+    }
+    const authorized = authorizedKeys.find(
+      (key) => ctx.method === 'publickey' && ctx.key.data.equals(key.getPublicSSH()),
+    )
+    if (ctx.method === 'publickey') {
+      const keyMatches = authorized !== undefined && ctx.key.algo === authorized.type
       if (!keyMatches) {
         ctx.reject(methods)
         return
@@ -105,6 +142,7 @@ export async function startTestServer(options: TestServerOptions = {}): Promise<
     }
     if (ctx.method === 'keyboard-interactive' && options.password !== undefined) {
       const password = options.password
+      state.keyboardQuestions.push('Password: ')
       ctx.prompt([{ prompt: 'Password: ', echo: false }], (answers) => {
         if (answers[0] !== undefined && same(answers[0], password)) ctx.accept()
         else ctx.reject(methods)
@@ -141,7 +179,10 @@ export async function startTestServer(options: TestServerOptions = {}): Promise<
   const server = new Server({ hostKeys: [hostKey] }, (connection) => {
     state.connections.push(connection)
     connection.on('error', () => undefined)
-    connection.on('authentication', onAuth)
+    const perConnection = { passwordPassed: false }
+    connection.on('authentication', (ctx) => {
+      onAuth(ctx, perConnection)
+    })
     connection.on('ready', () => {
       connection.on('session', (acceptSession) => {
         const session = acceptSession()
@@ -156,6 +197,21 @@ export async function startTestServer(options: TestServerOptions = {}): Promise<
         })
         session.on('shell', (accept) => {
           runShell(accept())
+        })
+        session.on('auth-agent', (accept) => {
+          agentForwards++
+          ;(accept as (() => void) | undefined)?.()
+        })
+        session.on('exec', (accept, _reject, info) => {
+          const stream = accept()
+          state.execs.push(info.command)
+          // "Install" a key the way the real command would.
+          const added = /'(ssh-[\w-]+ [A-Za-z0-9+/=]+) kelidar'/.exec(info.command)
+          if (added?.[1] !== undefined && (options.execExitCode ?? 0) === 0) {
+            authorizedKeys.push(parsePublic(added[1]))
+          }
+          stream.exit(options.execExitCode ?? 0)
+          stream.end()
         })
       })
     })

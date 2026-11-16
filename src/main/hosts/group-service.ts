@@ -47,6 +47,13 @@ export class GroupService {
         request.id === undefined ? undefined : groups.find((group) => group.id === request.id)
       if (request.id !== undefined && current === undefined) throw new AppError('GROUP_NOT_FOUND')
 
+      const identityId = request.defaults?.identityId
+      if (
+        identityId !== undefined &&
+        !data.identities.some((item) => item.id === identityId && live(item))
+      ) {
+        throw new AppError('IDENTITY_NOT_FOUND')
+      }
       const problem = checkParent(request.id, request.parentId, groups)
       if (problem === 'not-found') throw new AppError('GROUP_NOT_FOUND')
       if (problem === 'cycle') throw new AppError('GROUP_PARENT_INVALID')
@@ -70,6 +77,7 @@ export class GroupService {
         ...(request.defaults?.environment === undefined
           ? {}
           : { environment: request.defaults.environment }),
+        ...(identityId === undefined ? {} : { identityId }),
       }
       if (Object.keys(defaults).length === 0) delete group.defaults
       else group.defaults = defaults

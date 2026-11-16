@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { HOME_TAB, useTabsStore } from './tabs'
 
-export type SectionId = 'hosts' | 'settings'
+export type SectionId = 'hosts' | 'keychain' | 'settings'
 
 interface UiState {
   section: SectionId

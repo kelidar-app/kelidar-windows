@@ -3,6 +3,7 @@
  * can import it. The schemas for each channel live in ipc.ts.
  */
 export const IPC_CHANNELS = [
+  'agent:status',
   'app:getVersion',
   'clipboard:readText',
   'clipboard:writeText',
@@ -14,6 +15,16 @@ export const IPC_CHANNELS = [
   'hosts:delete',
   'hosts:setFavorite',
   'hosts:pickKeyFile',
+  'hosts:upgradePrepare',
+  'hosts:upgradeRun',
+  'identities:list',
+  'identities:save',
+  'identities:delete',
+  'keys:list',
+  'keys:generate',
+  'keys:import',
+  'keys:rename',
+  'keys:delete',
   'knownHosts:forget',
   'prompt:answer',
   'session:open',

@@ -16,6 +16,10 @@ export function shortcutOf(id: CommandId): ShortcutLabel {
 /** Kept for the components that name a shortcut in a tooltip. */
 export const SHORTCUTS = {
   hosts: shortcutOf('hosts'),
+  keychain: shortcutOf('keychain'),
+  newIdentity: shortcutOf('newIdentity'),
+  generateKey: shortcutOf('generateKey'),
+  importKey: shortcutOf('importKey'),
   settings: shortcutOf('settings'),
   newTab: shortcutOf('newTab'),
   closeTab: shortcutOf('closeTab'),

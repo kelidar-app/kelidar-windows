@@ -77,6 +77,7 @@ describe('SettingsStore', () => {
       theme: 'system',
       terminalTheme: 'kelidar',
       hostsView: 'cards',
+      agent: 'auto',
     })
     expect(await readJson()).toEqual({
       version: SETTINGS_VERSION,
@@ -84,6 +85,7 @@ describe('SettingsStore', () => {
       theme: 'system',
       terminalTheme: 'kelidar',
       hostsView: 'cards',
+      agent: 'auto',
     })
   })
 
@@ -96,6 +98,7 @@ describe('SettingsStore', () => {
         theme: 'dark',
         terminalTheme: 'soft',
         hostsView: 'cards',
+        agent: 'auto',
       }),
     )
     const store = await SettingsStore.open({ directory: dir, defaultLanguage: 'en' })
@@ -104,10 +107,11 @@ describe('SettingsStore', () => {
       theme: 'dark',
       terminalTheme: 'soft',
       hostsView: 'cards',
+      agent: 'auto',
     })
   })
 
-  it('migrates a version 1 file and saves it as version 3', async () => {
+  it('migrates a version 1 file and saves it as version 4', async () => {
     await writeFile(file, JSON.stringify({ version: 1, language: 'fa', theme: 'dark' }))
     const store = await SettingsStore.open({ directory: dir, defaultLanguage: 'en' })
     expect(store.getUi()).toEqual({
@@ -115,13 +119,15 @@ describe('SettingsStore', () => {
       theme: 'dark',
       terminalTheme: 'kelidar',
       hostsView: 'cards',
+      agent: 'auto',
     })
     expect(await readJson()).toEqual({
-      version: 3,
+      version: 4,
       language: 'fa',
       theme: 'dark',
       terminalTheme: 'kelidar',
       hostsView: 'cards',
+      agent: 'auto',
     })
   })
 
@@ -133,14 +139,21 @@ describe('SettingsStore', () => {
       theme: 'light',
       terminalTheme: 'kelidar',
       hostsView: 'cards',
+      agent: 'auto',
     })
-    await store.updateUi({ language: 'fa', terminalTheme: 'contrast', hostsView: 'cards' })
+    await store.updateUi({
+      language: 'fa',
+      terminalTheme: 'contrast',
+      hostsView: 'cards',
+      agent: 'auto',
+    })
     expect(await readJson()).toEqual({
-      version: 3,
+      version: 4,
       language: 'fa',
       theme: 'light',
       terminalTheme: 'contrast',
       hostsView: 'cards',
+      agent: 'auto',
       window: { width: 1000, height: 700, x: 10, y: 20, maximized: false },
     })
     expect((await readdir(dir)).filter((name) => name.endsWith('.tmp'))).toEqual([])
@@ -155,11 +168,12 @@ describe('SettingsStore', () => {
     ])
     await store.flush()
     expect(await readJson()).toEqual({
-      version: 3,
+      version: 4,
       language: 'fa',
       theme: 'light',
       terminalTheme: 'kelidar',
       hostsView: 'cards',
+      agent: 'auto',
     })
   })
 
@@ -172,6 +186,7 @@ describe('SettingsStore', () => {
       theme: 'system',
       terminalTheme: 'kelidar',
       hostsView: 'cards',
+      agent: 'auto',
     })
     const names = await readdir(dir)
     expect(names.some((name) => name.startsWith(`${SETTINGS_FILE_NAME}.broken-`))).toBe(true)
@@ -186,6 +201,7 @@ describe('SettingsStore', () => {
       theme: 'system',
       terminalTheme: 'kelidar',
       hostsView: 'cards',
+      agent: 'auto',
     })
   })
 

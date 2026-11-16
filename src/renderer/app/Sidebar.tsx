@@ -1,11 +1,19 @@
-import { Cable, FolderOpen, Server, Settings, SquareCode, type LucideIcon } from 'lucide-react'
+import {
+  Cable,
+  FolderOpen,
+  KeyRound,
+  Server,
+  Settings,
+  SquareCode,
+  type LucideIcon,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@renderer/lib/cn'
 import { HOME_TAB, useTabsStore } from '@renderer/stores/tabs'
 import { useUiStore, type SectionId } from '@renderer/stores/ui'
 import { SHORTCUTS } from './shortcuts'
 
-type NavKey = 'hosts' | 'files' | 'tunnels' | 'snippets' | 'settings'
+type NavKey = 'hosts' | 'keychain' | 'files' | 'tunnels' | 'snippets' | 'settings'
 
 interface NavItem {
   key: NavKey
@@ -17,6 +25,7 @@ interface NavItem {
 
 const MAIN_ITEMS: readonly NavItem[] = [
   { key: 'hosts', icon: Server, section: 'hosts', shortcut: SHORTCUTS.hosts },
+  { key: 'keychain', icon: KeyRound, section: 'keychain', shortcut: SHORTCUTS.keychain },
   { key: 'files', icon: FolderOpen },
   { key: 'tunnels', icon: Cable },
   { key: 'snippets', icon: SquareCode },

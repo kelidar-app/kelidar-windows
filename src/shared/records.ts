@@ -27,10 +27,14 @@ export const MAX_PORT = 65_535
 export const DEFAULT_SSH_PORT = 22
 export const portSchema = z.int().min(1).max(MAX_PORT)
 
-/** How a host signs in. `ask` means: ask for the password every time. */
+/**
+ * How a host or identity signs in. `ask` means: ask for the password every
+ * time. `agent` uses the keys loaded in the Windows OpenSSH agent or Pageant.
+ */
 export const authRefSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('password'), secretId: idSchema }),
   z.object({ type: z.literal('key'), keyId: idSchema }),
+  z.object({ type: z.literal('agent') }),
   z.object({ type: z.literal('ask') }),
 ])
 export type AuthRef = z.infer<typeof authRefSchema>
@@ -69,6 +73,8 @@ export const tagSchema = z
 export const groupDefaultsSchema = z.object({
   port: portSchema.optional(),
   environment: environmentSchema.optional(),
+  /** Hosts that set neither a user name nor an identity sign in with this one. */
+  identityId: idSchema.optional(),
 })
 export type GroupDefaults = z.infer<typeof groupDefaultsSchema>
 
@@ -91,10 +97,25 @@ export const hostRecordSchema = baseRecordSchema.extend({
   color: colorSchema.optional(),
   environment: environmentSchema.optional(),
   favorite: z.boolean().optional(),
+  /**
+   * Sign-in: an identity, or the host's own user name and auth. With neither,
+   * the host uses its group's identity.
+   */
+  identityId: idSchema.optional(),
   username: z.string().min(1).max(255).optional(),
   auth: authRefSchema.optional(),
+  /** Forward the local agent to this server (only for servers the user trusts). */
+  agentForward: z.boolean().optional(),
   lastConnectedAt: timestampSchema.optional(),
 })
+
+/** A user name and sign-in shared by many hosts; changing it changes them all. */
+export const identityRecordSchema = baseRecordSchema.extend({
+  name: z.string().min(1).max(200),
+  username: z.string().min(1).max(255),
+  auth: authRefSchema,
+})
+export type IdentityRecord = z.infer<typeof identityRecordSchema>
 export type HostRecord = z.infer<typeof hostRecordSchema>
 
 /** Never leaves the main process. */

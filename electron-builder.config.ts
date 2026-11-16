@@ -27,9 +27,12 @@ const config: Configuration = {
     '!**/node_modules/ssh2/lib/protocol/crypto/src/**',
     '!**/node_modules/ssh2/lib/protocol/crypto/binding.gyp',
     '!**/node_modules/ssh2/install.js',
-    // Pageant helper for agent sign-in, which arrives in Phase 2.
-    '!**/node_modules/ssh2/util/pagent.exe',
+    '!**/node_modules/ssh2/util/*.c',
+    '!**/node_modules/ssh2/util/*.bat',
   ],
+  // ssh2's prebuilt Pageant helper (for agent sign-in). Windows cannot run a
+  // program from inside app.asar, so it is unpacked next to it.
+  asarUnpack: ['**/node_modules/ssh2/util/pagent.exe'],
   // Nothing to compile for Electron: see the native addons note above.
   npmRebuild: false,
   asar: true,

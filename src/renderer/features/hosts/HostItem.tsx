@@ -7,6 +7,8 @@ import {
   Server,
   Star,
   Trash2,
+  Usb,
+  UserRound,
 } from 'lucide-react'
 import type { KeyboardEvent, MouseEvent } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -16,23 +18,37 @@ import type { Environment } from '@shared/records'
 import { Button } from '@renderer/components/ui/button'
 import { cn } from '@renderer/lib/cn'
 import { useGroupFormStore, useHostFormStore, useHostsStore } from '@renderer/stores/hosts'
+import { useKeychainDialogStore } from '@renderer/stores/keychain'
 import { useTabsStore } from '@renderer/stores/tabs'
 import { useUiStore } from '@renderer/stores/ui'
 import { COLOR_EDGE, ENVIRONMENT_BADGE } from './colors'
-import { HOST_KEYS } from './host-keys'
+import { canUpgradeToKey, HOST_KEYS } from './host-keys'
 
 export type HostLayout = 'cards' | 'list'
 
 function SignInIcon({ host }: { host: HostView }) {
   const { t } = useTranslation()
   const { method } = host.signIn
-  const Icon = method === 'key' ? KeyRound : method === 'password' ? LockKeyhole : MessageSquareMore
+  if (host.identity !== undefined) {
+    const label = t('hosts.signInIdentity', { name: host.identity.name })
+    return <UserRound aria-label={label} className="size-4 shrink-0 text-muted-foreground" />
+  }
+  const Icon =
+    method === 'key'
+      ? KeyRound
+      : method === 'password'
+        ? LockKeyhole
+        : method === 'agent'
+          ? Usb
+          : MessageSquareMore
   const label =
     method === 'key'
       ? t('hosts.signInKey')
       : method === 'password'
         ? t('hosts.signInPassword')
-        : t('hosts.signInAsk')
+        : method === 'agent'
+          ? t('hosts.signInAgent')
+          : t('hosts.signInAsk')
   return <Icon aria-label={label} className="size-4 shrink-0 text-muted-foreground" />
 }
 
@@ -100,6 +116,7 @@ export function HostItem({ host, layout }: { host: HostView; layout: HostLayout 
   const openHost = useTabsStore((state) => state.openHost)
   const setFavorite = useHostsStore((state) => state.setFavorite)
   const askDeleteHost = useGroupFormStore((state) => state.askDeleteHost)
+  const openKeychainDialog = useKeychainDialogStore((state) => state.open)
   const target = formatTarget(host)
   const connect = (): void => {
     void openHost(host.id)
@@ -124,6 +141,9 @@ export function HostItem({ host, layout }: { host: HostView; layout: HostLayout 
     } else if (code === 'KeyD' && event.ctrlKey) {
       event.preventDefault()
       toggleFavorite()
+    } else if (code === 'KeyU' && event.ctrlKey && canUpgradeToKey(host)) {
+      event.preventDefault()
+      openKeychainDialog({ kind: 'upgrade', host })
     } else if (key === 'ArrowDown' || key === 'ArrowUp' || key === 'Home' || key === 'End') {
       event.preventDefault()
       moveFocus(

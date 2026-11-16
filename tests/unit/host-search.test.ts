@@ -23,6 +23,7 @@ function host(fields: Partial<HostView> & { name: string }): HostView {
     username: 'root',
     tags: [],
     favorite: false,
+    agentForward: false,
     signIn: { method: 'ask' },
     createdAt: NOW,
     updatedAt: NOW,

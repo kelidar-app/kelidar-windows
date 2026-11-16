@@ -20,7 +20,9 @@ import type { HostView } from '@shared/hosts'
 import { LANGUAGES, THEMES, type Theme } from '@shared/settings'
 import { Dialog } from '@renderer/components/ui/dialog'
 import { scoreKeywords } from '@renderer/lib/fuzzy'
+import { canUpgradeToKey, HOST_KEYS } from '@renderer/features/hosts/host-keys'
 import { useGroupFormStore, useHostFormStore, useHostsStore } from '@renderer/stores/hosts'
+import { useKeychainDialogStore } from '@renderer/stores/keychain'
 import { useSettingsStore } from '@renderer/stores/settings'
 import { tabTitle, useTabsStore } from '@renderer/stores/tabs'
 import { useUiStore } from '@renderer/stores/ui'
@@ -334,6 +336,19 @@ function HostPage({ host, run }: { host: HostView; run: (action: () => void) => 
   const setFavorite = useHostsStore((state) => state.setFavorite)
   const askDeleteHost = useGroupFormStore((state) => state.askDeleteHost)
   const showSection = useUiStore((state) => state.showSection)
+  const openKeychainDialog = useKeychainDialogStore((state) => state.open)
+  const upgrade = canUpgradeToKey(host)
+    ? [
+        {
+          id: 'upgrade',
+          label: t('upgrade.open'),
+          shortcut: HOST_KEYS.upgrade,
+          action: () => {
+            openKeychainDialog({ kind: 'upgrade', host })
+          },
+        },
+      ]
+    : []
   const items: { id: string; label: string; shortcut: string; action: () => void }[] = [
     {
       id: 'connect',
@@ -365,6 +380,7 @@ function HostPage({ host, run }: { host: HostView; run: (action: () => void) => 
         askDeleteHost(host)
       },
     },
+    ...upgrade,
   ]
   return (
     <Command.Group heading={host.name} className={GROUP}>

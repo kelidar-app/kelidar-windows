@@ -52,6 +52,7 @@ export const COMMAND_IDS = [
   'palette',
   'shortcuts',
   'hosts',
+  'keychain',
   'settings',
   'newTab',
   'newHost',
@@ -63,6 +64,9 @@ export const COMMAND_IDS = [
   'previousTab',
   'renameTab',
   'paste',
+  'newIdentity',
+  'generateKey',
+  'importKey',
 ] as const
 export type CommandId = (typeof COMMAND_IDS)[number]
 
@@ -81,6 +85,10 @@ export const COMMAND_KEYS: Record<CommandId, readonly KeyCombo[]> = {
     { code: 'Slash', shift: true },
   ],
   hosts: [{ code: 'Digit1' }],
+  keychain: [{ code: 'Digit2' }],
+  newIdentity: [{ code: 'KeyI', shift: true }],
+  generateKey: [{ code: 'KeyG', shift: true }],
+  importKey: [{ code: 'KeyO', shift: true }],
   settings: [{ code: 'Comma' }],
   newTab: [{ code: 'KeyT' }],
   newHost: [{ code: 'KeyN', outsideTerminal: true }],

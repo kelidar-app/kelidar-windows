@@ -10,11 +10,14 @@ const PASSWORD = 'e2e-Pass-Osprey-6620'
 /**
  * Phase 2 smoke test. Step 2.1 (Organize): groups with inherited defaults,
  * tags, favorites, recent, card and list views, search, the command palette
- * and the shortcut cheat sheet. Later steps add to this file.
+ * and the shortcut cheat sheet. Step 2.2 (Credentials): the Keychain (key
+ * generation, copying the public key, identities) and Upgrade to key login.
+ * Later steps add to this file.
  */
 test('Phase 2 smoke: organize hosts, search, palette and shortcuts', async () => {
   const userData = await mkdtemp(path.join(os.tmpdir(), 'kelidar-e2e-p2-'))
   let server: TestServer | undefined
+  let keyServer: TestServer | undefined
   try {
     server = await startTestServer({ password: PASSWORD })
     let { app, page, consoleErrors } = await launch(userData)
@@ -131,6 +134,78 @@ test('Phase 2 smoke: organize hosts, search, palette and shortcuts', async () =>
     await page.keyboard.press('Escape')
     await expect(sheet).toBeHidden()
 
+    // Keychain: generate a key and copy its public key.
+    await page.keyboard.press('Control+2')
+    await expect(page.getByRole('heading', { name: 'Keychain', exact: true })).toBeVisible()
+    await page.keyboard.press('Control+Shift+G')
+    dialog = page.getByRole('dialog', { name: 'Generate a key' })
+    await page.keyboard.type('e2e key')
+    await dialog.getByRole('button', { name: 'Generate', exact: true }).click()
+    await expect(dialog).toBeHidden()
+    const keyRow = page.locator('[data-key-id]', { hasText: 'e2e key' })
+    await expect(keyRow.locator('[data-fingerprint]')).toHaveText(/^SHA256:[\w+/]{43}$/)
+    await keyRow.getByRole('button', { name: 'Copy the public key of e2e key' }).click()
+    const publicKey = await expect
+      .poll(() => app.evaluate(({ clipboard }) => clipboard.readText()))
+      .toMatch(/^ssh-ed25519 AAAA\S+ e2e key$/)
+      .then(() => app.evaluate(({ clipboard }) => clipboard.readText()))
+    keyServer = await startTestServer({ authorizedKey: publicKey })
+
+    // An identity that signs in with that key, used by a new host.
+    await page.keyboard.press('Control+Shift+I')
+    dialog = page.getByRole('dialog', { name: 'New identity' })
+    await page.keyboard.type('Tester')
+    await dialog.getByLabel('User name').fill('tester')
+    await dialog.getByText('Private key', { exact: true }).click()
+    await dialog.getByLabel('Key', { exact: true }).selectOption({ label: 'e2e key (ed25519)' })
+    await dialog.getByRole('button', { name: 'Save' }).click()
+    await expect(dialog).toBeHidden()
+    await expect(page.locator('[data-identity-id]', { hasText: 'Tester' })).toContainText(
+      'key e2e key',
+    )
+
+    await page.keyboard.press('Control+n')
+    dialog = page.getByRole('dialog', { name: 'New host' })
+    await dialog.getByLabel('Name', { exact: true }).fill('Keyed')
+    await dialog.getByLabel('Address').fill('127.0.0.1')
+    await dialog.getByText('Identity', { exact: true }).click()
+    await expect(dialog.getByLabel('User name')).toBeHidden()
+    await dialog.getByLabel('Identity to use').selectOption({ label: 'Tester (tester)' })
+    await dialog.getByRole('button', { name: 'More options' }).click()
+    await dialog.getByLabel('Port').fill(String(keyServer.port))
+    await dialog.getByRole('button', { name: 'Save' }).click()
+    await expect(dialog).toBeHidden()
+    await page
+      .locator('[data-host-item]', { hasText: 'Keyed' })
+      .getByRole('button', { name: 'Connect to Keyed' })
+      .click()
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Trust and connect' }).click()
+    await expect(page.locator('[data-tab-state="ready"]')).toHaveCount(2)
+    expect(keyServer.authAttempts.map((a) => a.method)).not.toContain('password')
+
+    // Upgrade Box from its password to a new key; the command is shown before it runs.
+    await page.keyboard.press('Control+1')
+    await page.getByRole('button', { name: 'Edit Box' }).first().click()
+    dialog = page.getByRole('dialog', { name: 'Edit host' })
+    await dialog.getByRole('button', { name: 'Upgrade to key login…' }).click()
+    dialog = page.getByRole('dialog', { name: 'Upgrade Box to key login' })
+    await dialog.getByRole('button', { name: 'Show the command' }).click()
+    const command = dialog.locator('[data-upgrade-command]')
+    await expect(command).toContainText('~/.ssh/authorized_keys')
+    expect(server.execs).toEqual([])
+    const shown = await command.textContent()
+    await dialog.getByRole('button', { name: /^Run on / }).click()
+    await expect(dialog.getByRole('status')).toContainText('now signs in with a key')
+    // Exactly the command that was shown ran on the server.
+    expect(server.execs[0]).toBe(shown)
+    await dialog.getByRole('button', { name: 'Close' }).click()
+    await expect(
+      page
+        .locator('[data-host-item]', { hasText: 'Box' })
+        .first()
+        .getByLabel('Signs in with a private key'),
+    ).toBeVisible()
+
     // Palette preferences: switch to Persian, and the layout mirrors.
     await page.keyboard.press('Control+k')
     await page.keyboard.type('فارسی')
@@ -157,6 +232,7 @@ test('Phase 2 smoke: organize hosts, search, palette and shortcuts', async () =>
   } finally {
     await closeAll()
     await server?.close()
+    await keyServer?.close()
     await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
   }
 })

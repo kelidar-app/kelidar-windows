@@ -1,5 +1,6 @@
 import { terminalActions } from '@renderer/features/terminal/terminal-registry'
 import { useGroupFormStore, useHostFormStore } from '@renderer/stores/hosts'
+import { useKeychainDialogStore } from '@renderer/stores/keychain'
 import { useSettingsStore } from '@renderer/stores/settings'
 import { HOME_TAB, useTabsStore } from '@renderer/stores/tabs'
 import { useUiStore } from '@renderer/stores/ui'
@@ -7,7 +8,7 @@ import { COMMAND_KEYS, findByKey, type CommandId, type KeyCombo } from './key-co
 
 export { comboAria, comboLabel, type CommandId } from './key-combos'
 
-export type CommandSection = 'general' | 'hosts' | 'tabs'
+export type CommandSection = 'general' | 'hosts' | 'keychain' | 'tabs'
 
 /**
  * Every app action in one list. The keyboard handler, the command palette
@@ -45,6 +46,9 @@ export const COMMANDS: readonly AppCommand[] = [
   command('hosts', 'general', () => {
     useUiStore.getState().showSection('hosts')
   }),
+  command('keychain', 'general', () => {
+    useUiStore.getState().showSection('keychain')
+  }),
   command('settings', 'general', () => {
     useUiStore.getState().showSection('settings')
   }),
@@ -66,6 +70,18 @@ export const COMMANDS: readonly AppCommand[] = [
     const settings = useSettingsStore.getState()
     useUiStore.getState().showSection('hosts')
     void settings.update({ hostsView: settings.settings.hostsView === 'cards' ? 'list' : 'cards' })
+  }),
+  command('newIdentity', 'keychain', () => {
+    useUiStore.getState().showSection('keychain')
+    useKeychainDialogStore.getState().open({ kind: 'identity' })
+  }),
+  command('generateKey', 'keychain', () => {
+    useUiStore.getState().showSection('keychain')
+    useKeychainDialogStore.getState().open({ kind: 'generateKey' })
+  }),
+  command('importKey', 'keychain', () => {
+    useUiStore.getState().showSection('keychain')
+    useKeychainDialogStore.getState().open({ kind: 'importKey' })
   }),
   command(
     'closeTab',

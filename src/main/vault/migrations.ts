@@ -4,7 +4,7 @@
  * rewritten in the new shape on the next save (after the usual backup of the
  * old file).
  */
-export const CURRENT_DATA_VERSION = 2
+export const CURRENT_DATA_VERSION = 3
 
 type Data = Record<string, unknown>
 
@@ -13,9 +13,10 @@ interface DataMigration {
   migrate: (data: Data) => Data
 }
 
-/** Version 2 (Phase 2) added groups. */
+/** Version 2 (Phase 2) added groups, version 3 identities. */
 const MIGRATIONS: readonly DataMigration[] = [
   { from: 1, migrate: (v1) => ({ ...v1, version: 2, groups: [] }) },
+  { from: 2, migrate: (v2) => ({ ...v2, version: 3, identities: [] }) },
 ]
 
 export type DataMigrationResult =

@@ -3,6 +3,12 @@ import os from 'node:os'
 import path from 'node:path'
 import { GroupService } from '../../../src/main/hosts/group-service'
 import { HostService } from '../../../src/main/hosts/host-service'
+import { KeyUpgrades } from '../../../src/main/hosts/key-upgrade'
+import { Agents } from '../../../src/main/keychain/agents'
+import { IdentityService } from '../../../src/main/keychain/identity-service'
+import { KeyService } from '../../../src/main/keychain/key-service'
+import { registerKeychainHandlers } from '../../../src/main/ipc/keychain-handlers'
+import { countAgentKeys, openSshAgent } from '../../../src/main/platform/agent'
 import { KeyFileImports } from '../../../src/main/hosts/key-files'
 import { registerHostHandlers } from '../../../src/main/ipc/host-handlers'
 import { createIpcRouter, type InvokeEventLike } from '../../../src/main/ipc/router'
@@ -93,6 +99,8 @@ export async function createHarness(
     keyFile?: () => string | null
     /** Home folder for Quick Connect's -i paths; the temp folder by default. */
     homeDir?: string
+    /** Named pipe of a test agent; agent sign-in finds no agent when omitted. */
+    agentPipe?: string
   } = {},
 ) {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'kelidar-it-'))
@@ -102,6 +110,18 @@ export async function createHarness(
   const keyFiles = new KeyFileImports()
   const hosts = new HostService(vaults, keyFiles)
   const groups = new GroupService(vaults)
+  const keys = new KeyService(vaults, keyFiles)
+  const identities = new IdentityService(vaults, keyFiles)
+  const noAgentPipe = '\\\\.\\pipe\\kelidar-no-agent-here'
+  const agents = new Agents(
+    {
+      openssh: () => openSshAgent(options.agentPipe ?? noAgentPipe),
+      // Pageant is never running in tests.
+      pageant: () => openSshAgent(noAgentPipe),
+      count: (agent) => countAgentKeys(agent, 1000),
+    },
+    () => 'auto',
+  )
   const prompts = new PromptBroker()
   const knownHosts = new KnownHosts(vaults)
   const sessions = new SessionManager({
@@ -110,6 +130,7 @@ export async function createHarness(
     knownHosts,
     prompts,
     log: (message) => logs.push(message),
+    agents,
     onConnected: (hostId) => {
       void hosts.markConnected(hostId)
     },
@@ -136,6 +157,19 @@ export async function createHarness(
     keyFiles,
     chooseKeyFile: () => Promise.resolve(options.keyFile?.() ?? null),
     sessionCredential: (event, sessionId) => sessions.usedCredential(event.sink, sessionId),
+  })
+  registerKeychainHandlers(router, {
+    keys,
+    identities,
+    agents,
+    upgrades: new KeyUpgrades({
+      vaults,
+      hosts,
+      keys,
+      runCommand: (owner, target, command, runOptions) =>
+        sessions.runCommand(owner, target, command, runOptions),
+    }),
+    ownerOf: (event) => event.sink,
   })
   registerSessionHandlers(router, {
     sessions,

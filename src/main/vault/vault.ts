@@ -5,6 +5,7 @@ import type { ErrorCode } from '@shared/errors'
 import {
   groupRecordSchema,
   hostRecordSchema,
+  identityRecordSchema,
   knownHostRecordSchema,
   secretRecordSchema,
   sshKeyRecordSchema,
@@ -26,6 +27,7 @@ export const vaultDataSchema = z.object({
   version: z.literal(DATA_VERSION),
   hosts: z.array(hostRecordSchema),
   groups: z.array(groupRecordSchema),
+  identities: z.array(identityRecordSchema),
   secrets: z.array(secretRecordSchema),
   keys: z.array(sshKeyRecordSchema),
   knownHosts: z.array(knownHostRecordSchema),
@@ -33,7 +35,15 @@ export const vaultDataSchema = z.object({
 export type VaultData = z.infer<typeof vaultDataSchema>
 
 export function emptyVaultData(): VaultData {
-  return { version: DATA_VERSION, hosts: [], groups: [], secrets: [], keys: [], knownHosts: [] }
+  return {
+    version: DATA_VERSION,
+    hosts: [],
+    groups: [],
+    identities: [],
+    secrets: [],
+    keys: [],
+    knownHosts: [],
+  }
 }
 
 const base64 = z.string().regex(/^[A-Za-z0-9+/]*={0,2}$/)

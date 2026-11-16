@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto'
-import { Client, type ClientChannel, type ConnectConfig } from 'ssh2'
+import { Client, type BaseAgent, type ClientChannel, type ConnectConfig } from 'ssh2'
 import type { ErrorCode } from '@shared/errors'
 import type { HostKeyInfo, SessionOpenResponse, SessionState, SessionTarget } from '@shared/session'
 import { AppError } from '../ipc/app-error'
+import type { Agents } from '../keychain/agents'
 import {
   createAuthHandler,
   MAX_PASSWORD_ATTEMPTS,
@@ -20,7 +21,17 @@ export interface ConnectTarget extends SessionTarget {
   hostId?: string
   title: string
   credential: Credential
+  /** Forward the local agent to the server (when one runs). */
+  agentForward?: boolean
 }
+
+/** What runCommand returns. The output is capped at MAX_COMMAND_OUTPUT bytes. */
+export interface CommandResult {
+  exitCode: number | null
+  output: string
+}
+
+export const MAX_COMMAND_OUTPUT = 64 * 1024
 
 export interface SessionTiming {
   readyTimeoutMs: number
@@ -58,6 +69,8 @@ export interface SessionManagerOptions {
   log?: (message: string) => void
   /** A session to a saved host reached a shell (for "Recent"). */
   onConnected?: (hostId: string) => void
+  /** Agent sign-in and forwarding. Without it, agent sign-in fails with AGENT_UNAVAILABLE. */
+  agents?: Pick<Agents, 'forSignIn' | 'forForwarding'>
   createClient?: () => Client
   timing?: Partial<SessionTiming>
 }
@@ -90,6 +103,20 @@ class Session {
   used: UsedCredential | undefined
   /** Starts as the target's credential; gains the passphrase once unlocked. */
   credential: Credential
+  agent: BaseAgent | undefined
+  forwardAgent = false
+  /** runCommand: no terminal, no events to the renderer (prompts still go to the window). */
+  exec:
+    | {
+        command: string
+        strict: boolean
+        output: Buffer[]
+        bytes: number
+        settled: boolean
+        resolve: (result: CommandResult) => void
+        reject: (error: AppError) => void
+      }
+    | undefined
 
   constructor(
     readonly id: string,
@@ -204,7 +231,7 @@ export class SessionManager {
     this.options.log?.(
       `session ${session.id.slice(0, 8)} ${state}${error === undefined ? '' : ` ${error}`}`,
     )
-    if (session.owner.isDestroyed()) return
+    if (session.owner.isDestroyed() || session.exec !== undefined) return
     session.owner.send('session:state', {
       sessionId: session.id,
       state,
@@ -222,6 +249,12 @@ export class SessionManager {
     this.flush(session)
     if (state === 'error') this.setState(session, 'error', error ?? 'SSH_FAILED')
     else this.setState(session, 'closed')
+    if (session.exec !== undefined && !session.exec.settled) {
+      session.exec.settled = true
+      session.exec.reject(
+        new AppError(state === 'error' ? (error ?? 'SSH_FAILED') : 'OPERATION_CANCELLED'),
+      )
+    }
     clearTimeout(session.timer)
     session.timer = undefined
     session.pending = []
@@ -256,10 +289,24 @@ export class SessionManager {
   private connect(session: Session): void {
     if (FINAL_STATES.has(session.state)) return
     this.options.log?.(`session ${session.id.slice(0, 8)} connecting`)
-    if (!session.owner.isDestroyed()) {
+    if (!session.owner.isDestroyed() && session.exec === undefined) {
       session.owner.send('session:state', { sessionId: session.id, state: 'connecting' })
     }
     void (async () => {
+      try {
+        if (session.credential.type === 'agent') {
+          if (this.options.agents === undefined) throw new AppError('AGENT_UNAVAILABLE')
+          session.agent = await this.options.agents.forSignIn()
+        }
+        if (session.target.agentForward === true && session.exec === undefined) {
+          session.agent ??= await this.options.agents?.forForwarding()
+          session.forwardAgent = session.agent !== undefined
+        }
+      } catch (error) {
+        this.finish(session, 'error', error instanceof AppError ? error.code : 'SSH_FAILED')
+        return
+      }
+      if (FINAL_STATES.has(session.state)) return
       const credential = session.credential
       if (credential.type === 'key' && credential.needsPassphrase === true) {
         const unlocked = await this.unlockKey(session, credential)
@@ -312,7 +359,8 @@ export class SessionManager {
     session.client = client
 
     client.on('ready', () => {
-      this.openShell(session, client)
+      if (session.exec === undefined) this.openShell(session, client)
+      else this.runExec(session, client)
     })
     client.on('error', (error) => {
       this.fail(session, error)
@@ -336,38 +384,48 @@ export class SessionManager {
       keepaliveInterval: this.timing.keepaliveIntervalMs,
       keepaliveCountMax: this.timing.keepaliveCountMax,
       tryKeyboard: true,
+      ...(session.agent === undefined ? {} : { agent: session.agent }),
+      ...(session.forwardAgent ? { agentForward: true } : {}),
       hostVerifier: (key: Buffer, verify: (valid: boolean) => void) => {
         this.verifyHostKey(session, key, verify)
       },
-      authHandler: createAuthHandler(target.username, session.credential, {
-        askPassword: async (attempt) => {
-          const answer = await this.options.prompts.ask(owner, {
-            sessionId: session.id,
-            kind: 'password',
-            username: target.username,
-            host: target.address,
-            attempt,
-          })
-          return answer?.kind === 'password' ? answer.value : null
+      authHandler: createAuthHandler(
+        target.username,
+        session.credential,
+        {
+          askPassword: async (attempt) => {
+            const answer = await this.options.prompts.ask(owner, {
+              sessionId: session.id,
+              kind: 'password',
+              username: target.username,
+              host: target.address,
+              attempt,
+            })
+            return answer?.kind === 'password' ? answer.value : null
+          },
+          askKeyboard: async (name, instructions, prompts) => {
+            const answer = await this.options.prompts.ask(owner, {
+              sessionId: session.id,
+              kind: 'keyboardInteractive',
+              host: target.address,
+              name,
+              instructions,
+              prompts,
+            })
+            return answer?.kind === 'keyboardInteractive' ? answer.values : null
+          },
+          onCancelled: () => {
+            session.cancelled = true
+          },
+          onTry: (used) => {
+            session.trying = used
+          },
         },
-        askKeyboard: async (name, instructions, prompts) => {
-          const answer = await this.options.prompts.ask(owner, {
-            sessionId: session.id,
-            kind: 'keyboardInteractive',
-            host: target.address,
-            name,
-            instructions,
-            prompts,
-          })
-          return answer?.kind === 'keyboardInteractive' ? answer.values : null
+        {
+          agent: session.agent,
+          strict: session.exec?.strict === true,
         },
-        onCancelled: () => {
-          session.cancelled = true
-        },
-        onTry: (used) => {
-          session.trying = used
-        },
-      }),
+      ),
     }
 
     try {
@@ -458,6 +516,73 @@ export class SessionManager {
         }
       },
     )
+  }
+
+  /** runCommand: one command over an exec channel, its output collected in main. */
+  private runExec(session: Session, client: Client): void {
+    const exec = session.exec
+    if (exec === undefined || FINAL_STATES.has(session.state)) return
+    client.exec(exec.command, (error, stream) => {
+      if (error instanceof Error) {
+        session.forcedError = 'SSH_SHELL_FAILED'
+        this.fail(session, error)
+        return
+      }
+      session.wasReady = true
+      this.setState(session, 'ready')
+      let exitCode: number | null = null
+      const collect = (chunk: Buffer): void => {
+        if (exec.bytes >= MAX_COMMAND_OUTPUT) return
+        const piece = chunk.subarray(0, MAX_COMMAND_OUTPUT - exec.bytes)
+        exec.output.push(piece)
+        exec.bytes += piece.length
+      }
+      stream.on('data', collect)
+      stream.stderr.on('data', collect)
+      stream.on('exit', (code: number | null) => {
+        exitCode = code
+      })
+      stream.on('close', () => {
+        if (!exec.settled) {
+          exec.settled = true
+          exec.resolve({ exitCode, output: Buffer.concat(exec.output).toString('utf8') })
+        }
+        session.shellClosed = true
+        this.finish(session, 'closed')
+      })
+    })
+  }
+
+  /**
+   * Connects, runs one command and disconnects, with the same host key checks
+   * and sign-in questions as a terminal session. `strict`: sign in with the
+   * target's credential only (no password or keyboard questions).
+   */
+  runCommand(
+    owner: EventSink,
+    target: ConnectTarget,
+    command: string,
+    options: { strict?: boolean } = {},
+  ): Promise<CommandResult> {
+    const session = new Session(randomUUID(), owner, target, 80, 24)
+    this.sessions.set(session.id, session)
+    const result = new Promise<CommandResult>((resolve, reject) => {
+      session.exec = {
+        command,
+        strict: options.strict === true,
+        output: [],
+        bytes: 0,
+        settled: false,
+        resolve,
+        reject,
+      }
+    })
+    setImmediate(() => {
+      this.connect(session)
+    })
+    return result.finally(() => {
+      this.sessions.delete(session.id)
+    })
   }
 
   private enqueue(session: Session, chunk: Buffer): void {

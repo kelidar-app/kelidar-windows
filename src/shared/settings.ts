@@ -1,7 +1,8 @@
 import { z } from 'zod'
+import { agentSourceSchema } from './keychain'
 
 /** Bump this and add a migration in src/main/settings/migrations.ts when the shape changes. */
-export const SETTINGS_VERSION = 3
+export const SETTINGS_VERSION = 4
 
 export const LANGUAGES = ['en', 'fa'] as const
 export const languageSchema = z.enum(LANGUAGES)
@@ -39,6 +40,7 @@ export const settingsFileSchema = z.object({
   theme: themeSchema,
   terminalTheme: terminalThemeSchema,
   hostsView: hostsViewSchema,
+  agent: agentSourceSchema,
   window: windowStateSchema.optional(),
 })
 export type SettingsFile = z.infer<typeof settingsFileSchema>
@@ -49,6 +51,7 @@ export const uiSettingsSchema = z.object({
   theme: themeSchema,
   terminalTheme: terminalThemeSchema,
   hostsView: hostsViewSchema,
+  agent: agentSourceSchema,
 })
 export type UiSettings = z.infer<typeof uiSettingsSchema>
 
@@ -58,6 +61,7 @@ export const uiSettingsPatchSchema = z
     theme: themeSchema.optional(),
     terminalTheme: terminalThemeSchema.optional(),
     hostsView: hostsViewSchema.optional(),
+    agent: agentSourceSchema.optional(),
   })
   .refine((patch) => Object.keys(patch).length > 0, { message: 'Empty patch' })
 export type UiSettingsPatch = z.infer<typeof uiSettingsPatchSchema>
@@ -67,6 +71,7 @@ export const DEFAULT_UI_SETTINGS: UiSettings = {
   theme: 'system',
   terminalTheme: 'kelidar',
   hostsView: 'cards',
+  agent: 'auto',
 }
 
 /** Persian when the system prefers it, otherwise English. */

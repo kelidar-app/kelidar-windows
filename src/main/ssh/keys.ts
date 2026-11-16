@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { utils, type ParsedKey } from 'ssh2'
 import type { KeyKind } from '@shared/records'
 import { AppError } from '../ipc/app-error'
@@ -61,4 +61,56 @@ export function describePublicKey(parsed: ParsedKey): {
     publicKey: `${parsed.type} ${blob.toString('base64')}`,
     fingerprint: sha256Fingerprint(blob),
   }
+}
+
+export type GeneratedKeyKind = 'ed25519' | 'rsa'
+
+/** RSA keys are generated at 4096 bits; ed25519 has a fixed size. */
+export const RSA_BITS = 4096
+
+function generatePair(
+  type: GeneratedKeyKind,
+  passphrase: string | undefined,
+): Promise<{ private: string; public: string }> {
+  const encryption =
+    passphrase === undefined || passphrase === ''
+      ? {}
+      : { passphrase, cipher: 'aes256-ctr', rounds: 16 }
+  const options = { comment: 'kelidar', ...encryption }
+  return new Promise((resolve, reject) => {
+    const done = (error: Error | null, pair: { private: string; public: string }): void => {
+      if (error === null) resolve(pair)
+      else reject(error)
+    }
+    if (type === 'rsa') utils.generateKeyPair('rsa', { bits: RSA_BITS, ...options }, done)
+    else utils.generateKeyPair('ed25519', options, done)
+  })
+}
+
+/**
+ * Makes a new key pair. ssh2 now and then (about 1 in 200 ed25519 keys)
+ * returns a private key its own parser refuses, so every key is read back
+ * and must sign and verify before it is used; a bad one is replaced.
+ */
+export async function generateKey(
+  type: GeneratedKeyKind,
+  passphrase?: string,
+): Promise<{ privateKey: string; parsed: ParsedKey }> {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    let pair: { private: string; public: string }
+    try {
+      pair = await generatePair(type, passphrase)
+    } catch (error) {
+      throw new AppError('KEY_GENERATE_FAILED', { cause: error })
+    }
+    const parsed = firstKey(
+      utils.parseKey(pair.private, passphrase === '' ? undefined : passphrase),
+    )
+    if (parsed instanceof Error || !parsed.isPrivateKey()) continue
+    const probe = randomBytes(32)
+    const signature = parsed.sign(probe)
+    if (signature instanceof Error || !parsed.verify(probe, signature)) continue
+    return { privateKey: pair.private, parsed }
+  }
+  throw new AppError('KEY_GENERATE_FAILED')
 }

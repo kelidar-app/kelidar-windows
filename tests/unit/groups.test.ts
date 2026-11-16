@@ -120,7 +120,7 @@ describe('schemas', () => {
       { ...valid, color: '#ff0000' },
       { ...valid, defaults: { port: 0 } },
       { ...valid, defaults: { environment: 'prod' } },
-      { ...valid, defaults: { identityId: id(1) } },
+      { ...valid, defaults: { identityId: 'not-a-uuid' } },
       { ...valid, extra: true },
     ]) {
       expect(groupSaveRequestSchema.safeParse(bad).success, JSON.stringify(bad)).toBe(false)
@@ -295,10 +295,13 @@ describe('GroupService and HostService together', () => {
 })
 
 describe('vault data migration', () => {
-  it('turns version 1 data into version 2 with an empty group list', () => {
+  it('turns version 1 data into version 3 with empty group and identity lists', () => {
     const v1 = { version: 1, hosts: [], secrets: [], keys: [], knownHosts: [] }
-    expect(migrateVaultData(v1)).toEqual({ status: 'ok', data: { ...v1, version: 2, groups: [] } })
-    expect(migrateVaultData({ version: 3 })).toEqual({ status: 'future' })
+    expect(migrateVaultData(v1)).toEqual({
+      status: 'ok',
+      data: { ...v1, version: 3, groups: [], identities: [] },
+    })
+    expect(migrateVaultData({ version: 4 })).toEqual({ status: 'future' })
     expect(migrateVaultData({ version: 'x' })).toEqual({ status: 'invalid' })
     expect(migrateVaultData([])).toEqual({ status: 'invalid' })
   })
@@ -353,7 +356,12 @@ describe('vault data migration', () => {
       )
 
       const vault = await Vault.open({ directory: dir, wrapper })
-      expect(vault.read()).toMatchObject({ version: 2, groups: [], hosts: [{ name: 'old' }] })
+      expect(vault.read()).toMatchObject({
+        version: 3,
+        groups: [],
+        identities: [],
+        hosts: [{ name: 'old' }],
+      })
       await vault.update((data) => {
         data.groups.push({ id: id(2), createdAt: now, updatedAt: now, name: 'new group' })
       })

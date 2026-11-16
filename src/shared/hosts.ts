@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { normalizeAddress } from './address'
+import { authRequestSchema, signInViewSchema } from './keychain'
 import {
   colorSchema,
   environmentSchema,
@@ -23,7 +24,10 @@ export const hostViewSchema = z.object({
   port: portSchema,
   /** The port the host sets itself (shown in the form). */
   ownPort: portSchema.optional(),
+  /** The user name used to connect: the host's own, or its identity's. */
   username: z.string(),
+  /** The user name the host sets itself; undefined when it uses an identity. */
+  ownUsername: z.string().optional(),
   groupId: idSchema.optional(),
   tags: z.array(z.string()),
   color: colorSchema.optional(),
@@ -31,23 +35,18 @@ export const hostViewSchema = z.object({
   environment: environmentSchema.optional(),
   ownEnvironment: environmentSchema.optional(),
   favorite: z.boolean(),
-  signIn: z.discriminatedUnion('method', [
-    z.object({ method: z.literal('password') }),
-    z.object({ method: z.literal('ask') }),
-    z.object({
-      method: z.literal('key'),
-      keyName: z.string(),
-      keyType: keyTypeSchema,
-      hasPassphrase: z.boolean(),
-    }),
-  ]),
+  /** The sign-in used to connect: the host's own, or its identity's. */
+  signIn: signInViewSchema,
+  /** Set when the host signs in with an identity: its own, or its group's. */
+  identity: z
+    .object({ id: idSchema, name: z.string(), from: z.enum(['host', 'group']) })
+    .optional(),
+  agentForward: z.boolean(),
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
   lastConnectedAt: timestampSchema.optional(),
 })
 export type HostView = z.infer<typeof hostViewSchema>
-
-const MAX_SECRET_LENGTH = 4096
 
 export const addressSchema = z
   .string()
@@ -100,12 +99,13 @@ export function splitTags(text: string): string[] {
 
 /**
  * hosts:save. `id` present = edit. Organizing fields (group, tags, color,
- * environment, port) replace the saved ones: left out means none. Favorite
- * is kept; hosts:setFavorite changes it.
- * Password: a value saves it; '' asks every time; undefined keeps the saved
- * one (and on a new host means: ask every time).
- * Key: `keyFileToken` comes from hosts:pickKeyFile; undefined keeps the key.
- * fromSession: the password or key that worked in a Quick Connect session.
+ * environment, port, agent forwarding) replace the saved ones: left out means
+ * none. Favorite is kept; hosts:setFavorite changes it.
+ * Sign-in: the auth requests in keychain.ts, plus
+ * - identity: sign in with a saved identity (no user name needed);
+ * - inherit: sign in with the group's identity (no user name needed);
+ * - fromSession: the password or key that worked in a Quick Connect session.
+ * Every other sign-in needs a user name.
  */
 export const hostSaveRequestSchema = z.strictObject({
   id: idSchema.optional(),
@@ -116,20 +116,12 @@ export const hostSaveRequestSchema = z.strictObject({
   tags: tagListSchema.optional(),
   color: colorSchema.optional(),
   environment: environmentSchema.optional(),
-  username: usernameSchema,
+  agentForward: z.boolean().optional(),
+  username: usernameSchema.optional(),
   auth: z.discriminatedUnion('type', [
-    z.strictObject({
-      type: z.literal('password'),
-      password: z.string().max(MAX_SECRET_LENGTH).optional(),
-    }),
-    z.strictObject({
-      type: z.literal('key'),
-      keyFileToken: z
-        .string()
-        .regex(/^[0-9a-f]{32}$/)
-        .optional(),
-      passphrase: z.string().max(MAX_SECRET_LENGTH).optional(),
-    }),
+    ...authRequestSchema.options,
+    z.strictObject({ type: z.literal('identity'), identityId: idSchema }),
+    z.strictObject({ type: z.literal('inherit') }),
     /** The sign-in that worked in a Quick Connect session (main keeps it). */
     z.strictObject({ type: z.literal('fromSession'), sessionId: idSchema }),
   ]),

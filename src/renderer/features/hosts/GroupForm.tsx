@@ -1,5 +1,5 @@
 import { ChevronDown } from 'lucide-react'
-import { useId, useState, type SyntheticEvent } from 'react'
+import { useEffect, useId, useState, type SyntheticEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { groupDefaultsFor, subtreeIds, type GroupView } from '@shared/groups'
 import { ENVIRONMENTS, MAX_PORT, type ColorId, type Environment } from '@shared/records'
@@ -9,6 +9,7 @@ import { Field } from '@renderer/components/ui/field'
 import { Input } from '@renderer/components/ui/input'
 import { Select } from '@renderer/components/ui/select'
 import { useGroupFormStore, useHostsStore, type GroupFormState } from '@renderer/stores/hosts'
+import { useKeychainStore } from '@renderer/stores/keychain'
 import { ColorPicker } from './ColorPicker'
 import { flattenGroups } from './host-search'
 
@@ -58,6 +59,11 @@ function GroupForm({
   const { t } = useTranslation()
   const groups = useHostsStore((state) => state.groups)
   const saveGroup = useHostsStore((state) => state.saveGroup)
+  const identities = useKeychainStore((state) => state.identities)
+  const loadKeychain = useKeychainStore((state) => state.load)
+  useEffect(() => {
+    void loadKeychain()
+  }, [loadKeychain])
   const editing = form.mode === 'edit' ? form.group : undefined
   const moreId = useId()
 
@@ -72,8 +78,11 @@ function GroupForm({
   const [environment, setEnvironment] = useState<Environment | ''>(
     editing?.defaults.environment ?? '',
   )
+  const [identityId, setIdentityId] = useState(editing?.defaults.identityId ?? '')
   const [showMore, setShowMore] = useState(
-    editing?.defaults.port !== undefined || editing?.defaults.environment !== undefined,
+    editing?.defaults.port !== undefined ||
+      editing?.defaults.environment !== undefined ||
+      editing?.defaults.identityId !== undefined,
   )
   const [errors, setErrors] = useState<{ name?: string; port?: string; form?: string }>({})
   const [saving, setSaving] = useState(false)
@@ -105,6 +114,7 @@ function GroupForm({
       defaults: {
         ...(portNumber === undefined ? {} : { port: portNumber }),
         ...(environment === '' ? {} : { environment }),
+        ...(identityId === '' ? {} : { identityId }),
       },
     })
     setSaving(false)
@@ -228,6 +238,36 @@ function GroupForm({
                 {ENVIRONMENTS.map((item) => (
                   <option key={item} value={item}>
                     {t(`environments.${item}`)}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+          <Field label={t('groups.identity')} hint={t('groups.identityHint')}>
+            {({ id, describedBy }) => (
+              <Select
+                id={id}
+                value={identityId}
+                aria-describedby={describedBy}
+                onChange={(event) => {
+                  setIdentityId(event.target.value)
+                }}
+              >
+                <option value="">
+                  {inherited.identityId.value === undefined
+                    ? t('groups.identityNone')
+                    : t('groups.identityInherit', {
+                        name:
+                          identities.find((item) => item.id === inherited.identityId.value)?.name ??
+                          '',
+                      })}
+                </option>
+                {identities.map((identity) => (
+                  <option key={identity.id} value={identity.id}>
+                    {t('hostForm.identityOption', {
+                      name: identity.name,
+                      username: identity.username,
+                    })}
                   </option>
                 ))}
               </Select>

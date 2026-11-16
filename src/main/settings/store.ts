@@ -30,6 +30,7 @@ function defaults(language: Language): SettingsFile {
     theme: 'system',
     terminalTheme: 'kelidar',
     hostsView: 'cards',
+    agent: 'auto',
   }
 }
 
@@ -116,6 +117,7 @@ export class SettingsStore {
       theme: this.current.theme,
       terminalTheme: this.current.terminalTheme,
       hostsView: this.current.hostsView,
+      agent: this.current.agent,
     }
   }
 

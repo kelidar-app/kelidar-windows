@@ -2,6 +2,17 @@ import { z } from 'zod'
 import type { IpcError } from './errors'
 import { groupSaveRequestSchema, groupViewSchema } from './groups'
 import { hostSaveRequestSchema, hostViewSchema, keyFileInfoSchema } from './hosts'
+import {
+  agentStatusSchema,
+  identitySaveRequestSchema,
+  identityViewSchema,
+  keyGenerateRequestSchema,
+  keyImportRequestSchema,
+  keyUpgradePlanSchema,
+  keyUpgradePrepareSchema,
+  keyUpgradeRunSchema,
+  keyViewSchema,
+} from './keychain'
 import type { IpcChannel } from './ipc-channels'
 import type { IpcEvent } from './ipc-events'
 import { idSchema } from './records'
@@ -29,7 +40,14 @@ import { uiSettingsPatchSchema, uiSettingsSchema } from './settings'
 const noPayload = z.undefined()
 const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/)
 
+const byId = z.strictObject({ id: idSchema })
+
 export const ipcContract = {
+  /** Which agents run and how many keys they offer. Never the keys. */
+  'agent:status': {
+    request: noPayload,
+    response: agentStatusSchema,
+  },
   'app:getVersion': {
     request: noPayload,
     response: z.object({ version: z.string() }),
@@ -77,6 +95,51 @@ export const ipcContract = {
   'hosts:pickKeyFile': {
     request: noPayload,
     response: keyFileInfoSchema.nullable(),
+  },
+  /** Upgrade to key login, step 1: the key and the exact command, nothing run yet. */
+  'hosts:upgradePrepare': {
+    request: keyUpgradePrepareSchema,
+    response: keyUpgradePlanSchema,
+  },
+  /** Step 2: install the key with the shown command, test it, switch the host to it. */
+  'hosts:upgradeRun': {
+    request: keyUpgradeRunSchema,
+    response: hostViewSchema,
+  },
+  'identities:list': {
+    request: noPayload,
+    response: z.array(identityViewSchema),
+  },
+  'identities:save': {
+    request: identitySaveRequestSchema,
+    response: identityViewSchema,
+  },
+  /** Refused while a host or group uses the identity. */
+  'identities:delete': {
+    request: byId,
+    response: z.undefined(),
+  },
+  'keys:list': {
+    request: noPayload,
+    response: z.array(keyViewSchema),
+  },
+  'keys:generate': {
+    request: keyGenerateRequestSchema,
+    response: keyViewSchema,
+  },
+  /** A file chosen with hosts:pickKeyFile joins the Keychain. */
+  'keys:import': {
+    request: keyImportRequestSchema,
+    response: keyViewSchema,
+  },
+  'keys:rename': {
+    request: z.strictObject({ id: idSchema, name: z.string().trim().min(1).max(200) }),
+    response: keyViewSchema,
+  },
+  /** Refused while a host or identity uses the key. */
+  'keys:delete': {
+    request: byId,
+    response: z.undefined(),
   },
   /** Removes the trusted server key for an address and port (after a changed-key warning). */
   'knownHosts:forget': {

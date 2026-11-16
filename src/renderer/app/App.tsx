@@ -2,6 +2,8 @@ import { useEffect } from 'react'
 import { GroupFormDialog } from '@renderer/features/hosts/GroupForm'
 import { HostFormDialog } from '@renderer/features/hosts/HostForm'
 import { HostsView } from '@renderer/features/hosts/HostsView'
+import { KeychainDialogs } from '@renderer/features/keychain/KeychainDialogs'
+import { KeychainView } from '@renderer/features/keychain/KeychainView'
 import { PromptDialogs } from '@renderer/features/sessions/PromptDialogs'
 import { SettingsView } from '@renderer/features/settings/SettingsView'
 import { TerminalPane } from '@renderer/features/terminal/TerminalPane'
@@ -33,7 +35,9 @@ export function App() {
       <div className="flex min-h-0 flex-1">
         <Sidebar />
         <main className="flex min-w-0 flex-1 flex-col">
-          {homeActive && (section === 'hosts' ? <HostsView /> : <SettingsView />)}
+          {homeActive && section === 'hosts' && <HostsView />}
+          {homeActive && section === 'keychain' && <KeychainView />}
+          {homeActive && section === 'settings' && <SettingsView />}
           {/* Terminals stay mounted while hidden, so their scrollback survives. */}
           {tabs.map((tab) => (
             <TerminalPane key={tab.id} tab={tab} active={tab.id === activeId} />
@@ -42,6 +46,7 @@ export function App() {
       </div>
       <HostFormDialog />
       <GroupFormDialog />
+      <KeychainDialogs />
       <PromptDialogs />
       <CommandPalette />
       <ShortcutsDialog />

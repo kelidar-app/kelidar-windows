@@ -35,6 +35,7 @@ export const groupSaveRequestSchema = z.strictObject({
     .strictObject({
       port: portSchema.optional(),
       environment: environmentSchema.optional(),
+      identityId: idSchema.optional(),
     })
     .optional(),
 })
@@ -88,7 +89,13 @@ export interface Inherited<T> {
 export function groupDefaultsFor(
   groupId: Id | undefined,
   groups: readonly GroupLike[],
-): { port: Inherited<number>; environment: Inherited<Environment | undefined> } {
+): {
+  port: Inherited<number>
+  environment: Inherited<Environment | undefined>
+  identityId: Inherited<Id | undefined>
+} {
+  let identityId: Inherited<Id | undefined> = { value: undefined, source: { from: 'default' } }
+  let identityFound = false
   let port: Inherited<number> = { value: DEFAULT_SSH_PORT, source: { from: 'default' } }
   let environment: Inherited<Environment | undefined> = {
     value: undefined,
@@ -106,8 +113,12 @@ export function groupDefaultsFor(
       environment = { value: defaults.environment, source: { from: 'group', groupId: group.id } }
       environmentFound = true
     }
+    if (!identityFound && defaults?.identityId !== undefined) {
+      identityId = { value: defaults.identityId, source: { from: 'group', groupId: group.id } }
+      identityFound = true
+    }
   }
-  return { port, environment }
+  return { port, environment, identityId }
 }
 
 /** A host's own value wins over its groups, and the groups over the built-in default. */
