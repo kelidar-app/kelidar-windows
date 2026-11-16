@@ -15,7 +15,8 @@ const PASSWORD = 'e2e-Pass-Osprey-6620'
  * Step 2.3 (Reach): a jump host chosen in the form, the sticky session
  * command shown before it runs, and a new tab on the same connection.
  * Step 2.4 (Terminal comfort): split panes and pane focus, search, zoom, the
- * production colors and paste guard, and the sudo password hotkey.
+ * production colors and paste guard, the sudo password hotkey, and dragging
+ * a tab into another tab's panes.
  * Later steps add to this file.
  */
 test('Phase 2 smoke: organize hosts, search, palette and shortcuts', async () => {
@@ -275,14 +276,16 @@ test('Phase 2 smoke: organize hosts, search, palette and shortcuts', async () =>
       .click()
     await expect(page.locator('[data-tab-state][data-environment="production"]')).toHaveCount(2)
     const view = page.locator('[data-tab-view]:not([hidden])')
-    await expect(view.locator('[data-pane-id][data-environment="production"]')).toHaveCount(1)
+    await expect(view.locator('[data-pane-id][data-environment="production"]:visible')).toHaveCount(
+      1,
+    )
 
     // Split right: a second pane on the same connection, then move focus with Alt+Arrow.
     await page.keyboard.press('Control+Shift+D')
-    await expect(view.locator('[data-pane-state="ready"]')).toHaveCount(2)
+    await expect(view.locator('[data-pane-state="ready"]:visible')).toHaveCount(2)
     await expect.poll(() => behindServer?.openShells()).toBe(3)
     expect(behindServer.connections).toHaveLength(1)
-    const panes = view.locator('[data-pane-id]')
+    const panes = view.locator('[data-pane-id]:visible')
     await expect(panes.nth(1)).toHaveAttribute('data-focused', '')
     await page.keyboard.press('Alt+ArrowLeft')
     await expect(panes.nth(0)).toHaveAttribute('data-focused', '')
@@ -316,17 +319,36 @@ test('Phase 2 smoke: organize hosts, search, palette and shortcuts', async () =>
     // sudo asks: the bar offers the hotkey, which types the saved password.
     await page.keyboard.type('sudo whoami')
     await page.keyboard.press('Enter')
-    await expect(view.locator('[data-sudo-bar]')).toBeVisible()
+    await expect(view.locator('[data-sudo-bar]:visible')).toBeVisible()
     expect(behindServer.sudoAnswers).toEqual([])
     await page.keyboard.press('Control+Shift+S')
     await expect
       .poll(() => behindServer?.sudoAnswers)
       .toEqual([{ password: PASSWORD, right: true }])
-    await expect(view.locator('[data-sudo-bar]')).toHaveCount(0)
+    await expect(view.locator('[data-sudo-bar]:visible')).toHaveCount(0)
 
     // Close the pane: the other one stays.
     await page.keyboard.press('Control+Shift+W')
-    await expect(view.locator('[data-pane-id]')).toHaveCount(1)
+    await expect(view.locator('[data-pane-id]:visible')).toHaveCount(1)
+
+    // Drag the second "Behind" tab into this one: a preview shows the half it
+    // will take, and on release both share the tab, still connected.
+    const tabCount = await page.locator('[data-tab-state]').count()
+    const shells = behindServer.openShells()
+    const source = page.locator('[data-tab-state]', { hasText: 'Behind' }).nth(1)
+    const tabBox = await source.boundingBox()
+    const area = await view.locator('[data-pane-id]:visible').boundingBox()
+    if (tabBox === null || area === null) throw new Error('tab or pane not visible')
+    await page.mouse.move(tabBox.x + 20, tabBox.y + tabBox.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(tabBox.x + 40, tabBox.y + tabBox.height / 2 + 20, { steps: 5 })
+    await page.mouse.move(area.x + area.width * 0.9, area.y + area.height / 2, { steps: 8 })
+    await page.mouse.move(area.x + area.width * 0.92, area.y + area.height / 2, { steps: 2 })
+    await expect(page.locator('[data-drop-preview="right"]')).toContainText('Put Behind here')
+    await page.mouse.up()
+    await expect(page.locator('[data-tab-state]')).toHaveCount(tabCount - 1)
+    await expect(view.locator('[data-pane-state="ready"]:visible')).toHaveCount(2)
+    expect(behindServer.openShells()).toBe(shells)
     await page.keyboard.press('Control+1')
 
     // Palette preferences: switch to Persian, and the layout mirrors.

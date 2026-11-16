@@ -1,9 +1,10 @@
 import { House, KeyRound, Plus, Search, X } from 'lucide-react'
-import type { KeyboardEvent } from 'react'
+import { useRef, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { SessionState } from '@shared/session'
 import { cn } from '@renderer/lib/cn'
 import { paneIds } from '@renderer/features/terminal/layout'
+import { TAB_DRAG_TYPE, useTabDragStore } from '@renderer/features/terminal/tab-drag'
 import { ENVIRONMENT_TAB, usePaneEnvironment } from '@renderer/features/terminal/use-environment'
 import {
   focusedPane,
@@ -118,6 +119,12 @@ function SessionTab({ tab, selected }: { tab: TerminalTab; selected: boolean }) 
   const state = pane?.state ?? 'closed'
   const title = tabTitle(tab, panes)
   const paneCount = paneIds(tab.layout).length
+  const dragging = useTabDragStore((state) => state.sourceTabId)
+  const switchTimer = useRef<number | undefined>(undefined)
+  const cancelSwitch = (): void => {
+    window.clearTimeout(switchTimer.current)
+    switchTimer.current = undefined
+  }
 
   const stateLabel = t(`terminal.state.${state}`)
   const closeLabel = t('nav.withShortcut', {
@@ -158,9 +165,34 @@ function SessionTab({ tab, selected }: { tab: TerminalTab; selected: boolean }) 
       className={cn(
         tabClass(selected),
         environment !== undefined && cn('border-t-2', ENVIRONMENT_TAB[environment]),
+        dragging === tab.id && 'opacity-50',
       )}
       data-tab-state={state}
       data-environment={environment}
+      data-tab-id={tab.id}
+      // Drag a tab into another tab's panes to show both side by side.
+      draggable
+      onDragStart={(event) => {
+        event.dataTransfer.effectAllowed = 'move'
+        event.dataTransfer.setData(TAB_DRAG_TYPE, tab.id)
+        useTabDragStore.getState().start(tab.id)
+      }}
+      onDragEnd={() => {
+        cancelSwitch()
+        useTabDragStore.getState().end()
+      }}
+      onDragEnter={() => {
+        // Hovering a tab with another tab shows it, so the drop can go into its panes.
+        if (dragging === null || dragging === tab.id || selected) return
+        cancelSwitch()
+        switchTimer.current = window.setTimeout(() => {
+          switchTimer.current = undefined
+          activate(tab.id)
+        }, 400)
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) cancelSwitch()
+      }}
     >
       <button
         type="button"

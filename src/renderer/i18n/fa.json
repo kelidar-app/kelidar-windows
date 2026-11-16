@@ -293,7 +293,9 @@
     "searchNext": "مورد بعدی (Enter)",
     "searchNone": "پیدا نشد",
     "searchCount": "{{index}} از {{count}}",
-    "splitDivider": "تغییر اندازه‌ی بخش‌ها"
+    "splitDivider": "تغییر اندازه‌ی بخش‌ها",
+    "dropHere": "{{title}} این‌جا قرار بگیرد",
+    "dropFull": "هر تب حداکثر {{max}} بخش دارد. اول یک بخش را ببندید."
   },
   "quickConnect": {
     "hint": "مثلاً root@server.example.com:2222، یا یک دستور کامل ssh با -p و -i را بچسبانید.",

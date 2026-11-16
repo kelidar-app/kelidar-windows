@@ -199,3 +199,58 @@ export function splitRects(layout: Layout): SplitInfo[] {
   walk(layout, { x: 0, y: 0, width: 1, height: 1 }, [])
   return splits
 }
+
+/** A tab holds at most this many panes (splits and tabs dropped into it). */
+export const MAX_PANES = 8
+
+/** Where a dragged tab goes, relative to the pane it is dropped on. */
+export type DropSide = 'left' | 'right' | 'top' | 'bottom'
+
+/** The side of a pane nearest to a point given as fractions (0..1) of the pane's size. */
+export function dropSide(x: number, y: number): DropSide {
+  const distances: [DropSide, number][] = [
+    ['left', x],
+    ['right', 1 - x],
+    ['top', y],
+    ['bottom', 1 - y],
+  ]
+  distances.sort((a, b) => a[1] - b[1])
+  return distances[0]?.[0] ?? 'right'
+}
+
+/** The half of a pane a dropped tab takes, for the preview. */
+export function dropPreview(rect: Rect, side: DropSide): Rect {
+  if (side === 'left') return { ...rect, width: rect.width / 2 }
+  if (side === 'right') return { ...rect, x: rect.x + rect.width / 2, width: rect.width / 2 }
+  if (side === 'top') return { ...rect, height: rect.height / 2 }
+  return { ...rect, y: rect.y + rect.height / 2, height: rect.height / 2 }
+}
+
+/**
+ * Splits the target pane in two: the inserted layout (a whole tab's panes)
+ * takes the given side, the target pane the other half.
+ */
+export function insertLayout(
+  layout: Layout,
+  targetPaneId: string,
+  inserted: Layout,
+  side: DropSide,
+): Layout {
+  if (layout.kind === 'pane') {
+    if (layout.paneId !== targetPaneId) return layout
+    const direction: SplitDirection = side === 'left' || side === 'right' ? 'beside' : 'below'
+    const insertedFirst = side === 'left' || side === 'top'
+    return {
+      kind: 'split',
+      direction,
+      ratio: 0.5,
+      first: insertedFirst ? inserted : layout,
+      second: insertedFirst ? layout : inserted,
+    }
+  }
+  return {
+    ...layout,
+    first: insertLayout(layout.first, targetPaneId, inserted, side),
+    second: insertLayout(layout.second, targetPaneId, inserted, side),
+  }
+}

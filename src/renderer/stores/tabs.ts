@@ -8,6 +8,8 @@ import type {
   SessionTarget,
 } from '@shared/session'
 import {
+  insertLayout,
+  MAX_PANES,
   neighbour,
   paneIds,
   paneLeaf,
@@ -18,6 +20,7 @@ import {
   type FocusDirection,
   type Layout,
   type LayoutPath,
+  type DropSide,
   type SplitDirection,
 } from '@renderer/features/terminal/layout'
 import { api } from '@renderer/lib/api'
@@ -82,6 +85,12 @@ interface TabsState {
   duplicate: (tabId: string) => Promise<boolean>
   /** Splits the active pane; the new pane opens on the same connection. */
   split: (direction: SplitDirection) => Promise<boolean>
+  /**
+   * Drag and drop: moves every pane of one tab into another tab, splitting
+   * the target pane. The sessions keep running; the source tab goes away.
+   * False when the target would hold more than MAX_PANES panes.
+   */
+  mergeTab: (sourceTabId: string, targetPaneId: string, side: DropSide) => boolean
   closePane: (paneId: string) => void
   focusPane: (paneId: string) => void
   moveFocus: (direction: FocusDirection) => void
@@ -292,6 +301,7 @@ export const useTabsStore = create<TabsState>()((set, get) => {
     split: async (direction) => {
       const active = activePane()
       if (active === undefined) return false
+      if (paneIds(active.tab.layout).length >= MAX_PANES) return false
       const result = await openBeside(active.pane)
       if (!result.ok) {
         set({ openError: result.code })
@@ -341,6 +351,30 @@ export const useTabsStore = create<TabsState>()((set, get) => {
           ),
         }
       })
+    },
+
+    mergeTab: (sourceTabId, targetPaneId, side) => {
+      const { tabs } = get()
+      const source = tabs.find((tab) => tab.id === sourceTabId)
+      const target = tabs.find((tab) => paneIds(tab.layout).includes(targetPaneId))
+      if (source === undefined || target === undefined || source.id === target.id) return false
+      if (paneIds(source.layout).length + paneIds(target.layout).length > MAX_PANES) return false
+      set((state) => ({
+        tabs: state.tabs
+          .filter((tab) => tab.id !== source.id)
+          .map((tab) =>
+            tab.id === target.id
+              ? {
+                  ...tab,
+                  layout: insertLayout(tab.layout, targetPaneId, source.layout, side),
+                  focusedPaneId: source.focusedPaneId,
+                }
+              : tab,
+          ),
+        activeId: target.id,
+        renamingId: state.renamingId === source.id ? null : state.renamingId,
+      }))
+      return true
     },
 
     focusPane: (paneId) => {

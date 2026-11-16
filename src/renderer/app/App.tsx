@@ -6,7 +6,7 @@ import { KeychainDialogs } from '@renderer/features/keychain/KeychainDialogs'
 import { KeychainView } from '@renderer/features/keychain/KeychainView'
 import { PromptDialogs } from '@renderer/features/sessions/PromptDialogs'
 import { SettingsView } from '@renderer/features/settings/SettingsView'
-import { TabView } from '@renderer/features/terminal/TabView'
+import { Workspace } from '@renderer/features/terminal/Workspace'
 import { PasteGuardDialog } from '@renderer/features/terminal/PasteGuardDialog'
 import { subscribeToPrompts } from '@renderer/stores/prompts'
 import { HOME_TAB, startTabs, useTabsStore } from '@renderer/stores/tabs'
@@ -22,7 +22,6 @@ export function App() {
   useGlobalShortcuts()
   useTitleBarOverlaySync()
   const section = useUiStore((state) => state.section)
-  const tabs = useTabsStore((state) => state.tabs)
   const activeId = useTabsStore((state) => state.activeId)
   useEffect(() => {
     startTabs()
@@ -40,9 +39,7 @@ export function App() {
           {homeActive && section === 'keychain' && <KeychainView />}
           {homeActive && section === 'settings' && <SettingsView />}
           {/* Terminals stay mounted while hidden, so their scrollback survives. */}
-          {tabs.map((tab) => (
-            <TabView key={tab.id} tab={tab} active={tab.id === activeId} />
-          ))}
+          <Workspace />
         </main>
       </div>
       <HostFormDialog />

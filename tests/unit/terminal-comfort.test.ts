@@ -2,6 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { looksLikeSudoPrompt } from '../../src/main/ssh/sudo'
 import { COMMAND_KEYS, comboLabel, findByKey } from '../../src/renderer/app/key-combos'
 import {
+  dropPreview,
+  dropSide,
+  insertLayout,
+  MAX_PANES,
   neighbour,
   paneIds,
   paneLeaf,
@@ -84,6 +88,33 @@ describe('pane layout', () => {
     // Dragging past the edge stops at 15% / 85%.
     expect(paneRects(setRatio(layout, [], 0.01)).get('a')?.width).toBeCloseTo(0.15)
     expect(paneRects(setRatio(layout, ['second'], 0.99)).get('b')?.height).toBeCloseTo(0.85)
+  })
+})
+
+describe('dropping a tab into another tab', () => {
+  it('picks the pane side nearest to the pointer', () => {
+    expect(dropSide(0.1, 0.5)).toBe('left')
+    expect(dropSide(0.95, 0.4)).toBe('right')
+    expect(dropSide(0.5, 0.05)).toBe('top')
+    expect(dropSide(0.4, 0.9)).toBe('bottom')
+  })
+
+  it('previews the half the dropped tab takes', () => {
+    const rect = { x: 0.5, y: 0, width: 0.5, height: 1 }
+    expect(dropPreview(rect, 'left')).toEqual({ x: 0.5, y: 0, width: 0.25, height: 1 })
+    expect(dropPreview(rect, 'bottom')).toEqual({ x: 0.5, y: 0.5, width: 0.5, height: 0.5 })
+  })
+
+  it("puts the whole dropped tab on that side of the pane, keeping the tab's own splits", () => {
+    const dropped = splitPane(paneLeaf('x'), 'x', 'y', 'below')
+    const left = insertLayout(threePanes(), 'c', dropped, 'left')
+    expect(paneIds(left)).toEqual(['a', 'b', 'x', 'y', 'c'])
+    const rects = paneRects(left)
+    expect(rects.get('x')).toEqual({ x: 0.5, y: 0.5, width: 0.25, height: 0.25 })
+    expect(rects.get('c')).toEqual({ x: 0.75, y: 0.5, width: 0.25, height: 0.5 })
+    const below = insertLayout(paneLeaf('a'), 'a', paneLeaf('x'), 'bottom')
+    expect(paneRects(below).get('x')).toEqual({ x: 0, y: 0.5, width: 1, height: 0.5 })
+    expect(MAX_PANES).toBe(8)
   })
 })
 

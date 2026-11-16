@@ -293,7 +293,9 @@
     "searchNext": "Next match (Enter)",
     "searchNone": "No matches",
     "searchCount": "{{index}} of {{count}}",
-    "splitDivider": "Resize panes"
+    "splitDivider": "Resize panes",
+    "dropHere": "Put {{title}} here",
+    "dropFull": "A tab holds at most {{max}} panes. Close a pane first."
   },
   "quickConnect": {
     "hint": "For example root@server.example.com:2222, or paste a whole ssh command with -p and -i.",
