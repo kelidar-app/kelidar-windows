@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { ChoiceGroup, type Choice } from '@renderer/components/ui/choice-group'
 import { useSettingsStore } from '@renderer/stores/settings'
+import { SecuritySettings } from '@renderer/features/security/SecuritySettings'
 import { TerminalSettings } from './TerminalSettings'
 import { TerminalThemePicker } from './TerminalThemePicker'
 import type { Language, Theme } from '@shared/settings'
@@ -23,7 +24,7 @@ export function SettingsView() {
   ]
 
   return (
-    <section className="mx-auto flex w-full max-w-2xl flex-col gap-8 overflow-y-auto p-8">
+    <section className="mx-auto flex w-full max-w-2xl flex-col gap-8 overflow-y-auto p-8 pb-24">
       <h1 className="text-xl font-semibold">{t('settings.title')}</h1>
 
       {error !== null && (
@@ -56,6 +57,7 @@ export function SettingsView() {
         />
       </div>
       <TerminalSettings />
+      <SecuritySettings />
     </section>
   )
 }

@@ -5,7 +5,14 @@ import { HOST_KEYS } from '@renderer/features/hosts/host-keys'
 import { useUiStore } from '@renderer/stores/ui'
 import { COMMANDS, comboLabel, type CommandSection } from './commands'
 
-const SECTIONS: readonly CommandSection[] = ['general', 'hosts', 'keychain', 'tabs', 'terminal']
+const SECTIONS: readonly CommandSection[] = [
+  'general',
+  'hosts',
+  'keychain',
+  'security',
+  'tabs',
+  'terminal',
+]
 
 function Keys({ keys }: { keys: readonly string[] }) {
   return (
@@ -87,6 +94,7 @@ export function ShortcutsDialog() {
             <Row label={t('shortcuts.favorite')} keys={[HOST_KEYS.favorite]} />
             <Row label={t('common.delete')} keys={[HOST_KEYS.remove]} />
             <Row label={t('upgrade.open')} keys={[HOST_KEYS.upgrade]} />
+            <Row label={t('security.copyPassword')} keys={[HOST_KEYS.copyPassword]} />
             <Row label={t('shortcuts.moveFocus')} keys={[HOST_KEYS.move]} />
             <li className="py-1.5 text-xs text-muted-foreground">{t('shortcuts.dragTip')}</li>
           </ul>

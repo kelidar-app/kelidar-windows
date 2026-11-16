@@ -8,7 +8,7 @@ export interface SettingsMigration {
   migrate: (data: SettingsData) => SettingsData
 }
 
-/** One step per version. Version 2 added the terminal theme, version 3 the hosts view, version 4 the agent, version 5 terminal fonts and the paste guard. */
+/** One step per version. Version 2 added the terminal theme, version 3 the hosts view, version 4 the agent, version 5 terminal fonts and the paste guard, version 6 the lock and clipboard settings. */
 export const SETTINGS_MIGRATIONS: readonly SettingsMigration[] = [
   { from: 1, migrate: (v1) => ({ ...v1, version: 2, terminalTheme: 'kelidar' }) },
   { from: 2, migrate: (v2) => ({ ...v2, version: 3, hostsView: 'cards' }) },
@@ -22,6 +22,16 @@ export const SETTINGS_MIGRATIONS: readonly SettingsMigration[] = [
       terminalFontSize: DEFAULT_UI_SETTINGS.terminalFontSize,
       terminalLineHeight: DEFAULT_UI_SETTINGS.terminalLineHeight,
       pasteGuard: true,
+    }),
+  },
+  {
+    from: 5,
+    migrate: (v5) => ({
+      ...v5,
+      version: 6,
+      autoLockMinutes: DEFAULT_UI_SETTINGS.autoLockMinutes,
+      lockOnWindowsLock: DEFAULT_UI_SETTINGS.lockOnWindowsLock,
+      clipboardClearSeconds: DEFAULT_UI_SETTINGS.clipboardClearSeconds,
     }),
   },
 ]

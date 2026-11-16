@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { HostService } from '../../src/main/hosts/host-service'
 import { KeyFileImports, MAX_KEY_FILE_BYTES } from '../../src/main/hosts/key-files'
 import { VaultService } from '../../src/main/vault/service'
-import { Vault } from '../../src/main/vault/vault'
 import { formatTarget, normalizeAddress } from '../../src/shared/address'
 import { hostSaveRequestSchema, type HostSaveRequest } from '../../src/shared/hosts'
 import { ipcContract } from '../../src/shared/ipc'
@@ -90,7 +89,7 @@ describe('HostService', () => {
 
   beforeEach(async () => {
     dir = await mkdtemp(path.join(os.tmpdir(), 'kelidar-hosts-'))
-    vaults = new VaultService(() => Vault.open({ directory: dir, wrapper: fakeWrapper() }))
+    vaults = new VaultService({ directory: dir, wrapper: fakeWrapper() })
     keyFiles = new KeyFileImports()
     service = new HostService(vaults, keyFiles)
   })
@@ -314,12 +313,10 @@ describe('HostService', () => {
 
   it('reports the vault error when the vault cannot open', async () => {
     const broken = new HostService(
-      new VaultService(() =>
-        Vault.open({
-          directory: dir,
-          wrapper: fakeWrapper({ isAvailable: () => Promise.resolve(false) }),
-        }),
-      ),
+      new VaultService({
+        directory: dir,
+        wrapper: fakeWrapper({ isAvailable: () => Promise.resolve(false) }),
+      }),
       keyFiles,
     )
     await expect(broken.list()).rejects.toMatchObject({ code: 'VAULT_UNAVAILABLE' })

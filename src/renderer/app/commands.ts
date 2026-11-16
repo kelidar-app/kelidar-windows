@@ -1,8 +1,14 @@
 import { FOCUS, paneIds } from '@renderer/features/terminal/layout'
 import { terminalActions } from '@renderer/features/terminal/terminal-registry'
 import { api } from '@renderer/lib/api'
-import { useGroupFormStore, useHostFormStore } from '@renderer/stores/hosts'
+import { useGroupFormStore, useHostFormStore, useHostsStore } from '@renderer/stores/hosts'
 import { useKeychainDialogStore } from '@renderer/stores/keychain'
+import {
+  copySavedPassword,
+  useSecurityDialogStore,
+  useVaultStore,
+  type SecurityDialog,
+} from '@renderer/stores/security'
 import { useSettingsStore } from '@renderer/stores/settings'
 import { activePaneId, HOME_TAB, useTabsStore, type Pane } from '@renderer/stores/tabs'
 import { useTerminalUiStore } from '@renderer/stores/terminal-ui'
@@ -11,7 +17,7 @@ import { COMMAND_KEYS, findByKey, type CommandId, type KeyCombo } from './key-co
 
 export { comboAria, comboLabel, type CommandId } from './key-combos'
 
-export type CommandSection = 'general' | 'hosts' | 'keychain' | 'tabs' | 'terminal'
+export type CommandSection = 'general' | 'hosts' | 'keychain' | 'security' | 'tabs' | 'terminal'
 
 /**
  * Every app action in one list. The keyboard handler, the command palette
@@ -58,6 +64,31 @@ function command(
 
 const tabs = () => useTabsStore.getState()
 
+const hasMasterPassword = (): boolean => {
+  const { status } = useVaultStore.getState()
+  return status.state === 'unlocked' && status.masterPassword
+}
+
+/**
+ * The host "Copy password" acts on: the focused host in the list, else the
+ * host of the active terminal. Only hosts that sign in with a saved password.
+ */
+function passwordHostId(): string | undefined {
+  const focused = document.activeElement?.closest<HTMLElement>('[data-host-item]')
+  const pane = activePane()
+  const id =
+    focused?.dataset['hostId'] ?? (pane?.source.kind === 'host' ? pane.source.hostId : undefined)
+  const host = useHostsStore.getState().hosts.find((item) => item.id === id)
+  return host?.signIn.method === 'password' ? host.id : undefined
+}
+
+function securityDialog(dialog: SecurityDialog): () => void {
+  return () => {
+    useUiStore.getState().showSection('settings')
+    useSecurityDialogStore.getState().show(dialog)
+  }
+}
+
 export const COMMANDS: readonly AppCommand[] = [
   command('palette', 'general', () => {
     useUiStore.getState().setPaletteOpen(true)
@@ -102,6 +133,27 @@ export const COMMANDS: readonly AppCommand[] = [
     useUiStore.getState().showSection('keychain')
     useKeychainDialogStore.getState().open({ kind: 'importKey' })
   }),
+  command(
+    'lockNow',
+    'security',
+    () => {
+      void useVaultStore.getState().lock()
+    },
+    hasMasterPassword,
+  ),
+  command(
+    'copyPassword',
+    'security',
+    () => {
+      const id = passwordHostId()
+      if (id !== undefined) void copySavedPassword('host', id)
+    },
+    () => passwordHostId() !== undefined,
+  ),
+  command('masterPassword', 'security', securityDialog('masterPassword')),
+  command('exportData', 'security', securityDialog('export')),
+  command('importData', 'security', securityDialog('import')),
+  command('restoreBackup', 'security', securityDialog('restore')),
   command('newTab', 'tabs', () => {
     useUiStore.getState().focusQuickConnect()
   }),

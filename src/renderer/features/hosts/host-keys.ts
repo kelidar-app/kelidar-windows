@@ -7,6 +7,7 @@ export const HOST_KEYS = {
   favorite: 'Ctrl+D',
   remove: 'Delete',
   upgrade: 'Ctrl+U',
+  copyPassword: 'Ctrl+Shift+A',
   move: '↑ ↓',
 } as const
 

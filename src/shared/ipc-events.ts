@@ -8,6 +8,7 @@ export const IPC_EVENTS = [
   'session:sudo',
   'prompt:request',
   'prompt:cancel',
+  'vault:state',
 ] as const
 
 export type IpcEvent = (typeof IPC_EVENTS)[number]

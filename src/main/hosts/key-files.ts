@@ -54,6 +54,11 @@ export class KeyFileImports {
     }
   }
 
+  /** The app locked: chosen key files leave memory. */
+  clear(): void {
+    this.pending.clear()
+  }
+
   /** The pending file, kept until discard() so a wrong passphrase can be retried. */
   peek(token: string): PendingKeyFile {
     this.prune()

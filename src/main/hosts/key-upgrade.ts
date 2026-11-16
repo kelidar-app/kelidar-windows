@@ -79,6 +79,11 @@ export class KeyUpgrades {
     this.now = deps.now ?? Date.now
   }
 
+  /** The app locked: planned upgrades (with their new private keys) leave memory. */
+  clear(): void {
+    this.plans.clear()
+  }
+
   async prepare(
     owner: EventSink,
     hostId: Id,

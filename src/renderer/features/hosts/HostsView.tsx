@@ -21,6 +21,7 @@ import { Dialog } from '@renderer/components/ui/dialog'
 import { Input } from '@renderer/components/ui/input'
 import { cn } from '@renderer/lib/cn'
 import { useGroupFormStore, useHostFormStore, useHostsStore } from '@renderer/stores/hosts'
+import { useSecurityDialogStore } from '@renderer/stores/security'
 import { useSettingsStore } from '@renderer/stores/settings'
 import { useTabsStore } from '@renderer/stores/tabs'
 import { useUiStore } from '@renderer/stores/ui'
@@ -97,12 +98,23 @@ export function HostsView() {
 
       <MoveError />
       {(error ?? openError) !== null && (
-        <p
+        <div
           role="alert"
-          className="mx-6 mt-4 rounded-md border border-destructive px-3 py-2 text-sm text-destructive"
+          className="mx-6 mt-4 flex flex-wrap items-center gap-3 rounded-md border border-destructive px-3 py-2 text-sm text-destructive"
         >
-          {t(`errors.${error ?? openError ?? 'INTERNAL'}`)}
-        </p>
+          <p className="flex-1">{t(`errors.${error ?? openError ?? 'INTERNAL'}`)}</p>
+          {(error === 'VAULT_CORRUPT' || error === 'VAULT_KEY_UNREADABLE') && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                useSecurityDialogStore.getState().show('restore')
+              }}
+            >
+              {t('security.restoreTitle')}
+            </Button>
+          )}
+        </div>
       )}
 
       {empty ? (

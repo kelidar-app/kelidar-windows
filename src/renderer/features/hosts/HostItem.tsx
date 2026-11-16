@@ -1,4 +1,5 @@
 import {
+  ClipboardCopy,
   KeyRound,
   LockKeyhole,
   MessageSquareMore,
@@ -19,6 +20,7 @@ import { Button } from '@renderer/components/ui/button'
 import { cn } from '@renderer/lib/cn'
 import { useGroupFormStore, useHostFormStore, useHostsStore } from '@renderer/stores/hosts'
 import { useKeychainDialogStore } from '@renderer/stores/keychain'
+import { copySavedPassword } from '@renderer/stores/security'
 import { useTabsStore } from '@renderer/stores/tabs'
 import { useUiStore } from '@renderer/stores/ui'
 import { COLOR_EDGE, ENVIRONMENT_BADGE } from './colors'
@@ -164,6 +166,20 @@ export function HostItem({ host, layout }: { host: HostView; layout: HostLayout 
 
   const actions = (
     <>
+      {host.signIn.method === 'password' && (
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={t('security.copyPasswordOf', { name: host.name })}
+          title={t('nav.withShortcut', {
+            label: t('security.copyPassword'),
+            shortcut: HOST_KEYS.copyPassword,
+          })}
+          onClick={() => void copySavedPassword('host', host.id)}
+        >
+          <ClipboardCopy aria-hidden />
+        </Button>
+      )}
       <Button
         variant="ghost"
         size="icon"
@@ -227,7 +243,7 @@ export function HostItem({ host, layout }: { host: HostView; layout: HostLayout 
     },
     tabIndex: 0,
     'aria-label': t('hosts.rowLabel', { name: host.name, target }),
-    'aria-keyshortcuts': 'Enter Control+E Control+D Delete',
+    'aria-keyshortcuts': 'Enter Control+E Control+D Delete Control+Shift+A',
     'data-host-id': host.id,
     'data-host-item': '',
     onKeyDown,

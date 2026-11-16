@@ -4,6 +4,7 @@ import {
   FileKey,
   KeyRound,
   Pencil,
+  ClipboardCopy,
   Plus,
   RefreshCw,
   Trash2,
@@ -18,6 +19,7 @@ import { Button } from '@renderer/components/ui/button'
 import { ChoiceGroup } from '@renderer/components/ui/choice-group'
 import { api } from '@renderer/lib/api'
 import { useKeychainDialogStore, useKeychainStore } from '@renderer/stores/keychain'
+import { copySavedPassword } from '@renderer/stores/security'
 import { useSettingsStore } from '@renderer/stores/settings'
 
 /** Identities, keys and the agent: everything a host can sign in with. */
@@ -127,6 +129,17 @@ function IdentitiesSection() {
               <span className="shrink-0 text-xs text-muted-foreground">
                 {t('keychain.usedBy', { count: identity.usedBy })}
               </span>
+              {identity.signIn.method === 'password' && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label={t('security.copyPasswordOf', { name: identity.name })}
+                  title={t('security.copyPassword')}
+                  onClick={() => void copySavedPassword('identity', identity.id)}
+                >
+                  <ClipboardCopy aria-hidden />
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"

@@ -18,13 +18,18 @@ import { KnownHosts } from '../../../src/main/ssh/host-keys'
 import { PromptBroker } from '../../../src/main/ssh/prompts'
 import { quickConnectTarget } from '../../../src/main/ssh/quick-target'
 import { SessionManager, type SessionTiming } from '../../../src/main/ssh/session-manager'
+import { registerSecurityHandlers } from '../../../src/main/ipc/security-handlers'
 import { registerSessionHandlers } from '../../../src/main/ipc/session-handlers'
+import { SecretClipboard } from '../../../src/main/security/secret-clipboard'
+import { DataTransfer } from '../../../src/main/vault/data-transfer'
 import { VaultService } from '../../../src/main/vault/service'
-import { Vault } from '../../../src/main/vault/vault'
 import { APP_ORIGIN } from '../../../src/shared/app'
 import type { IpcEventPayloads } from '../../../src/shared/ipc'
 import type { IpcEvent } from '../../../src/shared/ipc-events'
 import { fakeWrapper } from '../../unit/helpers/fake-wrapper'
+
+/** scrypt at its lowest accepted cost, for speed. */
+export const TEST_SCRYPT_COST = { N: 2 ** 14, r: 8, p: 1 }
 
 export type RecordedEvent = {
   [E in IpcEvent]: { event: E; payload: IpcEventPayloads[E] }
@@ -101,12 +106,20 @@ export async function createHarness(
     homeDir?: string
     /** Named pipe of a test agent; agent sign-in finds no agent when omitted. */
     agentPipe?: string
+    /** The vault folder; a new temp folder by default (removed on close). */
+    vaultDir?: string
   } = {},
 ) {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'kelidar-it-'))
   const logs: string[] = []
   const responses: unknown[] = []
-  const vaults = new VaultService(() => Vault.open({ directory: dir, wrapper: fakeWrapper() }))
+  // A cheap scrypt cost keeps master-password tests fast; the format is the same.
+  const vaults = new VaultService({
+    directory: options.vaultDir ?? dir,
+    wrapper: fakeWrapper(),
+    scryptCost: TEST_SCRYPT_COST,
+    sleep: () => Promise.resolve(),
+  })
   const keyFiles = new KeyFileImports()
   const hosts = new HostService(vaults, keyFiles)
   const groups = new GroupService(vaults)
@@ -178,7 +191,46 @@ export async function createHarness(
     ownerOf: (event) => event.sink,
   })
 
+  /** The system clipboard, in memory. */
+  const clipboard = {
+    text: '',
+    writeText(text: string) {
+      this.text = text
+    },
+    readText() {
+      return this.text
+    },
+    clear() {
+      this.text = ''
+    },
+  }
+  const clipboardSeconds = { value: 30 }
+  const secretClipboard = new SecretClipboard(clipboard, () => clipboardSeconds.value)
+  /** What the save and open dialogs return; null: the user cancelled. */
+  const dialogs: { exportPath: string | null; importPath: string | null } = {
+    exportPath: null,
+    importPath: null,
+  }
+  registerSecurityHandlers(router, {
+    vaults,
+    hosts,
+    identities,
+    clipboard: secretClipboard,
+    transfer: new DataTransfer(vaults, { scryptCost: TEST_SCRYPT_COST }),
+    chooseExportPath: () => Promise.resolve(dialogs.exportPath),
+    chooseImportPath: () => Promise.resolve(dialogs.importPath),
+  })
+
   const sink = new FakeSink(1)
+  // As in src/main/index.ts: locking drops secrets and tells the window.
+  vaults.onChange((status) => {
+    if (status.state === 'locked') {
+      sessions.forgetSecrets()
+      keyFiles.clear()
+      void secretClipboard.clear()
+    }
+    sink.send('vault:state', status)
+  })
   const frame: FrameLike = { url: `${APP_ORIGIN}/index.html`, parent: null }
 
   /** Calls a channel exactly as the renderer would, and records the response. */
@@ -207,6 +259,9 @@ export async function createHarness(
     vaults,
     knownHosts,
     sessions,
+    clipboard,
+    clipboardSeconds,
+    dialogs,
     invoke,
     call,
     close: async () => {

@@ -7,6 +7,7 @@ import { DEFAULT_UI_SETTINGS } from '@shared/settings'
 import { App } from './app/App'
 import { initI18n } from './i18n'
 import { api } from './lib/api'
+import { useVaultStore } from './stores/security'
 import { useSettingsStore } from './stores/settings'
 
 async function bootstrap(): Promise<void> {
@@ -17,6 +18,9 @@ async function bootstrap(): Promise<void> {
   const settings = result.ok ? result.data : DEFAULT_UI_SETTINGS
   useSettingsStore.setState({ settings, error: result.ok ? null : result.error.code })
   await initI18n(settings.language)
+  // Locked at start (master password): the lock screen comes first, with no flash of the app.
+  const vault = await api.invoke('vault:status')
+  if (vault.ok) useVaultStore.setState({ status: vault.data })
 
   const container = document.getElementById('root')
   if (container === null) throw new Error('Missing #root element')

@@ -30,6 +30,21 @@ import {
   type SessionDataEvent,
   type SessionStateEvent,
 } from './session'
+import {
+  backupInfoSchema,
+  backupNameSchema,
+  exportRequestSchema,
+  exportResponseSchema,
+  importPickResponseSchema,
+  importRequestSchema,
+  importSummarySchema,
+  masterPasswordRequestSchema,
+  secretCopyRequestSchema,
+  secretCopyResponseSchema,
+  typedPasswordSchema,
+  vaultStatusSchema,
+  type VaultStatus,
+} from './security'
 import { uiSettingsPatchSchema, uiSettingsSchema } from './settings'
 
 /**
@@ -67,6 +82,21 @@ export const ipcContract = {
   'clipboard:writeText': {
     request: z.strictObject({ text: z.string().max(10_000_000) }),
     response: z.undefined(),
+  },
+  /** Manual backup: main asks where to save, then writes the encrypted file. */
+  'data:export': {
+    request: exportRequestSchema,
+    response: exportResponseSchema,
+  },
+  /** Import, step 1: main shows the open dialog and checks the file. */
+  'data:importPick': {
+    request: noPayload,
+    response: importPickResponseSchema,
+  },
+  /** Import, step 2: the file's password; its records are merged into the vault. */
+  'data:import': {
+    request: importRequestSchema,
+    response: importSummarySchema,
   },
   'groups:list': {
     request: noPayload,
@@ -166,6 +196,11 @@ export const ipcContract = {
     request: promptAnswerSchema,
     response: z.undefined(),
   },
+  /** Main puts a saved password on the clipboard and clears it later. The value never comes here. */
+  'secret:copy': {
+    request: secretCopyRequestSchema,
+    response: secretCopyResponseSchema,
+  },
   /** Starts connecting and returns at once; progress arrives as session:state events. */
   'session:open': {
     request: sessionOpenRequestSchema,
@@ -213,6 +248,33 @@ export const ipcContract = {
     request: uiSettingsPatchSchema,
     response: uiSettingsSchema,
   },
+  'vault:status': {
+    request: noPayload,
+    response: vaultStatusSchema,
+  },
+  'vault:unlock': {
+    request: z.strictObject({ password: typedPasswordSchema }),
+    response: vaultStatusSchema,
+  },
+  /** Only with a master password; otherwise nothing happens. */
+  'vault:lock': {
+    request: noPayload,
+    response: vaultStatusSchema,
+  },
+  'vault:setMasterPassword': {
+    request: masterPasswordRequestSchema,
+    response: vaultStatusSchema,
+  },
+  /** The automatic backups, newest first. */
+  'vault:backups': {
+    request: noPayload,
+    response: z.array(backupInfoSchema),
+  },
+  /** Puts an automatic backup in place of the vault (the current one is kept as a backup). */
+  'vault:restore': {
+    request: z.strictObject({ name: backupNameSchema }),
+    response: vaultStatusSchema,
+  },
   'window:setTitleBarOverlay': {
     request: z.strictObject({ color: hexColor, symbolColor: hexColor }),
     response: z.undefined(),
@@ -238,6 +300,8 @@ export interface IpcEventPayloads {
   'session:sudo': { sessionId: string; prompt: boolean; canFill: boolean }
   'prompt:request': PromptRequest
   'prompt:cancel': { promptId: string }
+  /** The vault was locked, unlocked, restored or failed. */
+  'vault:state': VaultStatus
 }
 export type IpcEventPayload<E extends IpcEvent> = IpcEventPayloads[E]
 

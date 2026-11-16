@@ -68,6 +68,9 @@ describe('IPC router', () => {
       terminalFontSize: 14,
       terminalLineHeight: 1.1,
       pasteGuard: true,
+      autoLockMinutes: 15 as const,
+      lockOnWindowsLock: true,
+      clipboardClearSeconds: 30 as const,
     }))
     const versionHandler = vi.fn(() => ({ version: '1.2.3' }))
     router.handle('settings:update', handler)
@@ -99,6 +102,9 @@ describe('IPC router', () => {
       terminalFontSize: 14,
       terminalLineHeight: 1.1,
       pasteGuard: true,
+      autoLockMinutes: 15 as const,
+      lockOnWindowsLock: true,
+      clipboardClearSeconds: 30 as const,
     }))
     router.handle('settings:update', handler)
     await call('settings:update', trusted, { theme: 'dark' })
@@ -118,6 +124,9 @@ describe('IPC router', () => {
         terminalFontSize: 14,
         terminalLineHeight: 1.1,
         pasteGuard: true,
+        autoLockMinutes: 15 as const,
+        lockOnWindowsLock: true,
+        clipboardClearSeconds: 30 as const,
         window: { width: 1 },
       }
       return withExtra
@@ -134,6 +143,9 @@ describe('IPC router', () => {
         terminalFontSize: 14,
         terminalLineHeight: 1.1,
         pasteGuard: true,
+        autoLockMinutes: 15 as const,
+        lockOnWindowsLock: true,
+        clipboardClearSeconds: 30 as const,
       },
     })
   })

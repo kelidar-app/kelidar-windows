@@ -23,6 +23,7 @@ import { scoreKeywords } from '@renderer/lib/fuzzy'
 import { canUpgradeToKey, HOST_KEYS } from '@renderer/features/hosts/host-keys'
 import { useGroupFormStore, useHostFormStore, useHostsStore } from '@renderer/stores/hosts'
 import { useKeychainDialogStore } from '@renderer/stores/keychain'
+import { copySavedPassword } from '@renderer/stores/security'
 import { useSettingsStore } from '@renderer/stores/settings'
 import { tabTitle, useTabsStore } from '@renderer/stores/tabs'
 import { useUiStore } from '@renderer/stores/ui'
@@ -387,6 +388,16 @@ function HostPage({ host, run }: { host: HostView; run: (action: () => void) => 
       },
     },
     ...upgrade,
+    ...(host.signIn.method === 'password'
+      ? [
+          {
+            id: 'copyPassword',
+            label: t('security.copyPassword'),
+            shortcut: HOST_KEYS.copyPassword,
+            action: () => void copySavedPassword('host', host.id),
+          },
+        ]
+      : []),
   ]
   return (
     <Command.Group heading={host.name} className={GROUP}>

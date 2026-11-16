@@ -482,6 +482,19 @@ export class HostService {
   }
 
   /**
+   * Main only, for "Copy password": the saved password the host signs in
+   * with (its own or its identity's). It goes to the clipboard, never to the
+   * renderer.
+   */
+  async savedPassword(id: Id): Promise<string> {
+    const data = (await this.vaults.get()).read()
+    const auth = effectiveSignIn(data, this.find(data, id)).auth
+    const password = auth?.type === 'password' ? secretValue(data, auth.secretId) : undefined
+    if (password === undefined) throw new AppError('PASSWORD_NOT_SAVED')
+    return password
+  }
+
+  /**
    * Main only: everything a session needs, including the secret values: the
    * jump hosts on the way, and the proxy of the first connection.
    */

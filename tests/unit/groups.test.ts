@@ -157,7 +157,7 @@ describe('GroupService and HostService together', () => {
 
   beforeEach(async () => {
     dir = await mkdtemp(path.join(os.tmpdir(), 'kelidar-groups-'))
-    vaults = new VaultService(() => Vault.open({ directory: dir, wrapper: fakeWrapper() }))
+    vaults = new VaultService({ directory: dir, wrapper: fakeWrapper() })
     hosts = new HostService(vaults, new KeyFileImports())
     groups = new GroupService(vaults)
   })

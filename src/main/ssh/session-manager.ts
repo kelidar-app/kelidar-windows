@@ -93,6 +93,8 @@ const RETRYABLE: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
   'SSH_CONNECTION_LOST',
   'SSH_FAILED',
   'PROXY_UNREACHABLE',
+  // Reconnecting while the app is locked: try again after it is unlocked.
+  'VAULT_LOCKED',
   'PROXY_REFUSED',
   'JUMP_FORWARD_FAILED',
 ])
@@ -131,11 +133,58 @@ class Hop {
   forcedError: ErrorCode | undefined
 
   constructor(
-    readonly target: HopTarget,
+    public target: HopTarget,
     readonly last: boolean,
   ) {
     this.credential = target.credential
   }
+}
+
+/**
+ * The same sign-in with no secret left in it. From the vault (a saved host):
+ * nothing is kept, the host is read again before the next use. From Quick
+ * Connect: the password and the key passphrase are asked again; a key file
+ * from the user's disk stays.
+ */
+function withoutSecret(credential: Credential, fromVault: boolean): Credential {
+  switch (credential.type) {
+    case 'password':
+      return { type: 'ask' }
+    case 'key':
+      if (fromVault) return { type: 'ask' }
+      return {
+        type: 'key',
+        privateKey: credential.privateKey,
+        keyName: credential.keyName,
+        ...(credential.passphrase !== undefined || credential.needsPassphrase === true
+          ? { needsPassphrase: true }
+          : {}),
+      }
+    default:
+      return credential
+  }
+}
+
+function targetWithoutSecrets(target: ConnectTarget, fromVault: boolean): ConnectTarget {
+  const proxy = target.proxy
+  return {
+    ...target,
+    credential: withoutSecret(target.credential, fromVault),
+    ...(target.via === undefined
+      ? {}
+      : {
+          via: target.via.map((hop) => ({
+            ...hop,
+            credential: withoutSecret(hop.credential, fromVault),
+          })),
+        }),
+    ...(proxy === undefined ? {} : { proxy: { ...proxy, password: undefined } }),
+  }
+}
+
+function hopsFor(target: ConnectTarget): Hop[] {
+  const via = target.via ?? []
+  return [...via.map((hop) => new Hop(hop, false)), new Hop(target, true)]
 }
 
 /** Why a link failed, and on which server. */
@@ -157,7 +206,7 @@ class Link {
   readonly id = randomUUID()
   state: 'connecting' | 'ready' | 'reconnecting' | 'closed' = 'connecting'
   readonly sessions = new Set<Session>()
-  readonly hops: Hop[]
+  hops: Hop[]
   clients: Client[] = []
   sockets: Duplex[] = []
   client: Client | undefined
@@ -168,21 +217,31 @@ class Link {
   attempt = 0
   retryTimer: NodeJS.Timeout | undefined
   cancelled = false
+  /** The app locked: the secrets are gone and are read again before the next use. */
+  secretsForgotten = false
+  /** The app locked while connecting: forget the secrets once connected. */
+  forgetWhenReady = false
+  /** The sudo hotkey can still type the sign-in password (read again from the vault). */
+  sudoFillable = false
 
   constructor(
     readonly owner: EventSink,
-    readonly target: ConnectTarget,
+    public target: ConnectTarget,
     /** runCommand: try only the given credential on the target, and never reconnect. */
     readonly strict: boolean,
   ) {
-    const via = target.via ?? []
-    this.hops = [...via.map((hop) => new Hop(hop, false)), new Hop(target, true)]
+    this.hops = hopsFor(target)
   }
 
   get final(): Hop {
     const hop = this.hops.at(-1)
     if (hop === undefined) throw new Error('A link always has its target')
     return hop
+  }
+
+  /** Read anew after an await: another refresh may have put the secrets back. */
+  forgotten(): boolean {
+    return this.secretsForgotten
   }
 
   /** Reads the state anew: it may change while an await is pending (a tab closed). */
@@ -355,12 +414,15 @@ export class SessionManager {
    * but only while the output ends with a sudo password prompt (input not
    * echoed), so the password cannot land on the screen.
    */
-  fillSudo(owner: EventSink, sessionId: string): void {
+  async fillSudo(owner: EventSink, sessionId: string): Promise<void> {
     const session = this.owned(owner, sessionId)
+    const prompting = (): boolean =>
+      session.state === 'ready' && session.stream !== undefined && session.sudoPrompt
+    if (!prompting()) throw new AppError('SUDO_NO_PROMPT')
+    // Locked and unlocked since sign-in: read the password from the vault again.
+    if (session.link.secretsForgotten) await this.refreshSecrets(session.link)
     const stream = session.stream
-    if (session.state !== 'ready' || stream === undefined || !session.sudoPrompt) {
-      throw new AppError('SUDO_NO_PROMPT')
-    }
+    if (!prompting() || stream === undefined) throw new AppError('SUDO_NO_PROMPT')
     const password = this.signInPassword(session)
     if (password === undefined) throw new AppError('SUDO_NO_PASSWORD')
     stream.write(`${password}\r`)
@@ -370,7 +432,11 @@ export class SessionManager {
 
   /** The password the session signed in with (saved, or typed when asked). */
   private signInPassword(session: Session): string | undefined {
-    const final = session.link.final
+    return this.signInPasswordOf(session.link)
+  }
+
+  private signInPasswordOf(link: Link): string | undefined {
+    const final = link.final
     if (final.used?.type === 'password') return final.used.password
     return final.credential.type === 'password' ? final.credential.password : undefined
   }
@@ -379,11 +445,61 @@ export class SessionManager {
     if (session.sudoPrompt === prompt) return
     session.sudoPrompt = prompt
     if (session.owner.isDestroyed() || session.exec !== undefined) return
+    const link = session.link
     session.owner.send('session:sudo', {
       sessionId: session.id,
       prompt,
-      canFill: this.signInPassword(session) !== undefined,
+      canFill:
+        this.signInPassword(session) !== undefined || (link.secretsForgotten && link.sudoFillable),
     })
+  }
+
+  /**
+   * The app locked: every connection stays open, but the passwords and keys
+   * kept for reconnecting and for the sudo hotkey leave memory. A saved host
+   * reads them from the vault again when next needed (after unlocking).
+   */
+  forgetSecrets(): void {
+    const links = new Set([...this.sessions.values()].map((session) => session.link))
+    for (const link of links) {
+      if (link.state === 'closed' || link.strict) continue
+      if (link.state === 'connecting') link.forgetWhenReady = true
+      else this.forgetLinkSecrets(link)
+    }
+  }
+
+  private forgetLinkSecrets(link: Link): void {
+    if (link.secretsForgotten) return
+    const fromVault = link.target.hostId !== undefined
+    link.sudoFillable = fromVault && this.signInPasswordOf(link) !== undefined
+    link.secretsForgotten = true
+    link.target = targetWithoutSecrets(link.target, fromVault)
+    for (const hop of link.hops) {
+      hop.credential = withoutSecret(hop.credential, fromVault)
+      hop.target = { ...hop.target, credential: withoutSecret(hop.target.credential, fromVault) }
+      hop.used = undefined
+      hop.trying = null
+    }
+    link.prepared = false
+  }
+
+  /** A saved host's secrets, read from the vault again. Throws VAULT_LOCKED while locked. */
+  private async refreshSecrets(link: Link): Promise<void> {
+    const hostId = link.target.hostId
+    if (!link.secretsForgotten) return
+    if (hostId === undefined) {
+      // Quick Connect: the password is asked again while connecting.
+      link.secretsForgotten = false
+      return
+    }
+    const fresh = await this.options.resolveHost(hostId)
+    // Read anew: another refresh may have finished during the await.
+    if (!link.forgotten()) return
+    link.target = fresh
+    link.hops = hopsFor(fresh)
+    link.secretsForgotten = false
+    link.sudoFillable = false
+    link.prepared = false
   }
 
   /** While reconnecting: try now instead of waiting. */
@@ -749,6 +865,10 @@ export class SessionManager {
     link.state = 'ready'
     link.wasReady = true
     link.attempt = 0
+    if (link.forgetWhenReady) {
+      link.forgetWhenReady = false
+      this.forgetLinkSecrets(link)
+    }
     client.on('close', () => {
       this.onLinkDropped(link, client)
     })
@@ -822,6 +942,8 @@ export class SessionManager {
     if (link.state !== 'reconnecting') return
     clearTimeout(link.retryTimer)
     try {
+      await this.refreshSecrets(link)
+      if (!link.is('reconnecting')) return
       const client = await this.establish(link)
       if (!link.is('reconnecting')) {
         client.end()

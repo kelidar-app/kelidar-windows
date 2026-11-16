@@ -1,8 +1,9 @@
 import { z } from 'zod'
 import { agentSourceSchema } from './keychain'
+import { AUTO_LOCK_MINUTES, CLIPBOARD_CLEAR_SECONDS } from './security'
 
 /** Bump this and add a migration in src/main/settings/migrations.ts when the shape changes. */
-export const SETTINGS_VERSION = 5
+export const SETTINGS_VERSION = 6
 
 export const LANGUAGES = ['en', 'fa'] as const
 export const languageSchema = z.enum(LANGUAGES)
@@ -35,6 +36,11 @@ export const MAX_FONT_SIZE = 36
 export const terminalFontSizeSchema = z.int().min(MIN_FONT_SIZE).max(MAX_FONT_SIZE)
 export const terminalLineHeightSchema = z.number().min(1).max(2)
 
+/** Minutes without input before the app locks (with a master password); 0: never. */
+export const autoLockMinutesSchema = z.literal(AUTO_LOCK_MINUTES)
+/** Seconds before a copied password leaves the clipboard; 0: never. */
+export const clipboardClearSecondsSchema = z.literal(CLIPBOARD_CLEAR_SECONDS)
+
 const pixels = z.int().min(-100_000).max(100_000)
 
 export const windowStateSchema = z.object({
@@ -59,6 +65,10 @@ export const settingsFileSchema = z.object({
   terminalLineHeight: terminalLineHeightSchema,
   /** Ask before pasting text with line breaks (production hosts always ask). */
   pasteGuard: z.boolean(),
+  autoLockMinutes: autoLockMinutesSchema,
+  /** Lock when Windows locks or the computer goes to sleep. */
+  lockOnWindowsLock: z.boolean(),
+  clipboardClearSeconds: clipboardClearSecondsSchema,
   window: windowStateSchema.optional(),
 })
 export type SettingsFile = z.infer<typeof settingsFileSchema>
@@ -74,6 +84,9 @@ export const uiSettingsSchema = z.object({
   terminalFontSize: terminalFontSizeSchema,
   terminalLineHeight: terminalLineHeightSchema,
   pasteGuard: z.boolean(),
+  autoLockMinutes: autoLockMinutesSchema,
+  lockOnWindowsLock: z.boolean(),
+  clipboardClearSeconds: clipboardClearSecondsSchema,
 })
 export type UiSettings = z.infer<typeof uiSettingsSchema>
 
@@ -88,6 +101,9 @@ export const uiSettingsPatchSchema = z
     terminalFontSize: terminalFontSizeSchema.optional(),
     terminalLineHeight: terminalLineHeightSchema.optional(),
     pasteGuard: z.boolean().optional(),
+    autoLockMinutes: autoLockMinutesSchema.optional(),
+    lockOnWindowsLock: z.boolean().optional(),
+    clipboardClearSeconds: clipboardClearSecondsSchema.optional(),
   })
   .refine((patch) => Object.keys(patch).length > 0, { message: 'Empty patch' })
 export type UiSettingsPatch = z.infer<typeof uiSettingsPatchSchema>
@@ -102,6 +118,9 @@ export const DEFAULT_UI_SETTINGS: UiSettings = {
   terminalFontSize: 14,
   terminalLineHeight: 1.1,
   pasteGuard: true,
+  autoLockMinutes: 15,
+  lockOnWindowsLock: true,
+  clipboardClearSeconds: 30,
 }
 
 /** Persian when the system prefers it, otherwise English. */

@@ -5,7 +5,7 @@ import type { KeyFileImports } from '../hosts/key-files'
 import { AppError } from '../ipc/app-error'
 import type { VaultService } from '../vault/service'
 import type { VaultData } from '../vault/vault'
-import { applyAuth, checkAuth, live, retireAuth, toSignInView } from './auth-store'
+import { applyAuth, checkAuth, live, retireAuth, secretValue, toSignInView } from './auth-store'
 
 /** Hosts and groups that name the identity (hosts that only inherit it are not counted). */
 export function identityUsage(data: VaultData, identityId: Id): number {
@@ -34,6 +34,17 @@ export class IdentityService {
     private readonly keyFiles: KeyFileImports,
     private readonly now: () => Date = () => new Date(),
   ) {}
+
+  /** Main only, for "Copy password": the identity's saved password. */
+  async savedPassword(id: Id): Promise<string> {
+    const data = (await this.vaults.get()).read()
+    const identity = data.identities.find((item) => item.id === id && live(item))
+    if (identity === undefined) throw new AppError('IDENTITY_NOT_FOUND')
+    const auth = identity.auth
+    const password = auth.type === 'password' ? secretValue(data, auth.secretId) : undefined
+    if (password === undefined) throw new AppError('PASSWORD_NOT_SAVED')
+    return password
+  }
 
   async list(): Promise<IdentityView[]> {
     const data = (await this.vaults.get()).read()

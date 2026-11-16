@@ -415,3 +415,120 @@ test('Phase 2 smoke: organize hosts, search, palette and shortcuts', async () =>
     await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
   }
 })
+
+/**
+ * Step 2.5 (Security): copy a saved password (cleared on lock), set a master
+ * password, lock and unlock (a locked vault shows nothing sensitive), the
+ * automatic backups, export and import, and a restart that opens locked.
+ */
+test('Phase 2 security: master password, lock screen, backups, export and import', async () => {
+  const userData = await mkdtemp(path.join(os.tmpdir(), 'kelidar-e2e-p2s-'))
+  const master = 'e2e-Master-Kestrel-3307'
+  const exportFile = path.join(userData, 'backup.kelidar')
+  try {
+    let { app, page, consoleErrors } = await launch(userData)
+
+    await page.keyboard.press('Control+n')
+    const form = page.getByRole('dialog', { name: 'New host' })
+    await form.getByLabel('Name', { exact: true }).fill('Vault Box')
+    await form.getByLabel('Address').fill('vault-box.example.test')
+    await form.getByLabel('User name').fill('tester')
+    await form.getByRole('textbox', { name: 'Password' }).fill(PASSWORD)
+    await form.getByRole('button', { name: 'Save' }).click()
+    await expect(form).toBeHidden()
+
+    // Copy password: main writes the clipboard; the page never holds the value.
+    const item = page.locator('[data-host-item]', { hasText: 'Vault Box' }).first()
+    await item.focus()
+    await page.keyboard.press('Control+Shift+A')
+    await expect(page.locator('[data-notice]')).toContainText('Password copied')
+    const clipboardText = () => app.evaluate(({ clipboard }) => clipboard.readText())
+    expect(await clipboardText()).toBe(PASSWORD)
+
+    // Set a master password from Settings.
+    await page.keyboard.press('Control+,')
+    await page.getByRole('button', { name: 'Set a master password' }).click()
+    let dialog = page.getByRole('dialog', { name: 'Set a master password' })
+    await dialog.getByLabel('New master password').fill('short')
+    await dialog.getByLabel('Type it again').fill('short')
+    await dialog.getByRole('button', { name: 'Set password' }).click()
+    await expect(dialog).toContainText('Use at least 8 characters.')
+    await dialog.getByLabel('New master password').fill(master)
+    await dialog.getByLabel('Type it again').fill(master)
+    await dialog.getByRole('button', { name: 'Set password' }).click()
+    await expect(dialog).toBeHidden()
+    await expect(page.getByLabel('Lock after no activity')).toBeEnabled()
+
+    // Lock: only the lock screen remains; no host, no clipboard password.
+    await page.keyboard.press('Control+Shift+K')
+    const lockScreen = page.locator('[data-lock-screen]')
+    await expect(lockScreen.getByRole('heading', { name: 'Kelidar is locked' })).toBeVisible()
+    await expect(page.locator('[data-app-shell]')).toBeHidden()
+    const lockedHtml = await page.evaluate(() => document.documentElement.outerHTML)
+    expect(lockedHtml).not.toContain('Vault Box')
+    expect(lockedHtml).not.toContain('vault-box.example.test')
+    await expect.poll(clipboardText).toBe('')
+
+    await lockScreen.getByLabel('Master password').fill('not the password')
+    await lockScreen.getByRole('button', { name: 'Unlock' }).click()
+    await expect(lockScreen).toContainText('That is not the master password.')
+    await lockScreen.getByLabel('Master password').fill(master)
+    await lockScreen.getByRole('button', { name: 'Unlock' }).click()
+    await expect(lockScreen).toBeHidden()
+    await page.keyboard.press('Control+1')
+    await expect(page.locator('[data-host-item]', { hasText: 'Vault Box' }).first()).toBeVisible()
+
+    // The automatic backups, newest first, protected by the master password
+    // (a change makes one: the copy before it is kept).
+    await page.locator('[data-host-item]', { hasText: 'Vault Box' }).first().focus()
+    await page.keyboard.press('Control+d')
+    await expect(
+      page.getByRole('button', { name: 'Remove Vault Box from favorites' }).first(),
+    ).toBeVisible()
+    await page.keyboard.press('Control+Shift+H')
+    dialog = page.getByRole('dialog', { name: 'Restore a backup' })
+    await expect(dialog.locator('[data-backup]').first()).toContainText('master password')
+    await dialog.getByRole('button', { name: 'Close' }).click()
+    await expect(dialog).toBeHidden()
+
+    // Export to a file (the save dialog is answered in main), then import it again.
+    await app.evaluate(({ dialog: native }, file) => {
+      native.showSaveDialog = () => Promise.resolve({ canceled: false, filePath: file })
+      native.showOpenDialog = () => Promise.resolve({ canceled: false, filePaths: [file] })
+    }, exportFile)
+    await page.keyboard.press('Control+Shift+X')
+    dialog = page.getByRole('dialog', { name: 'Export a backup file' })
+    await dialog.getByLabel('Password for the file').fill('file-password-77')
+    await dialog.getByLabel('Type it again').fill('file-password-77')
+    await dialog.getByRole('button', { name: 'Choose where to save' }).click()
+    await expect(dialog).toBeHidden()
+    await expect(page.locator('[data-notice]')).toContainText('backup.kelidar')
+    const exported = await readFile(exportFile, 'utf8')
+    expect(exported).not.toContain('Vault Box')
+    expect(exported).not.toContain(PASSWORD)
+
+    await page.keyboard.press('Control+Shift+J')
+    dialog = page.getByRole('dialog', { name: 'Import a backup file' })
+    await dialog.getByRole('button', { name: 'Choose file…' }).first().click()
+    await dialog.getByLabel('Password for the file').fill('file-password-77')
+    await dialog.getByRole('button', { name: 'Import' }).click()
+    await expect(dialog).toBeHidden()
+    await expect(page.locator('[data-notice]')).toContainText('0 new, 0 updated, 1 already')
+
+    expect(consoleErrors).toEqual([])
+    expect(await page.evaluate(() => document.documentElement.outerHTML)).not.toContain(PASSWORD)
+    await app.close()
+
+    // Restart: the lock screen comes first.
+    ;({ app, page, consoleErrors } = await launch(userData, 'lock'))
+    await expect(page.getByRole('navigation')).toBeHidden()
+    await page.locator('[data-lock-screen]').getByLabel('Master password').fill(master)
+    await page.keyboard.press('Enter')
+    await expect(page.locator('[data-host-item]', { hasText: 'Vault Box' }).first()).toBeVisible()
+    expect(consoleErrors).toEqual([])
+    await app.close()
+  } finally {
+    await closeAll()
+    await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
+  }
+})

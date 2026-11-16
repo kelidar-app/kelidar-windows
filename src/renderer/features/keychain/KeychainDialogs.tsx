@@ -1,5 +1,5 @@
-import { FileKey, Loader2 } from 'lucide-react'
-import { useState, type ReactNode, type SyntheticEvent } from 'react'
+import { FileKey } from 'lucide-react'
+import { useState, type SyntheticEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ErrorCode } from '@shared/errors'
 import type { KeyFileInfo } from '@shared/hosts'
@@ -8,6 +8,7 @@ import type { GeneratedKeyType, IdentityView, KeyView } from '@shared/keychain'
 import { Button } from '@renderer/components/ui/button'
 import { ChoiceGroup } from '@renderer/components/ui/choice-group'
 import { Dialog } from '@renderer/components/ui/dialog'
+import { FormDialog, FormError } from '@renderer/components/ui/form-dialog'
 import { Field } from '@renderer/components/ui/field'
 import { Input } from '@renderer/components/ui/input'
 import { api } from '@renderer/lib/api'
@@ -38,59 +39,6 @@ export function KeychainDialogs() {
     case 'none':
       return null
   }
-}
-
-function FormError({ message }: { message: string | undefined }) {
-  if (message === undefined) return null
-  return (
-    <p
-      role="alert"
-      className="rounded-md border border-destructive px-3 py-2 text-sm text-destructive"
-    >
-      {message}
-    </p>
-  )
-}
-
-function FormDialog({
-  title,
-  description,
-  onDone,
-  onSubmit,
-  busy,
-  submitLabel,
-  children,
-}: {
-  title: string
-  description?: string
-  onDone: () => void
-  onSubmit: (event: SyntheticEvent) => void
-  busy: boolean
-  submitLabel: string
-  children: ReactNode
-}) {
-  const { t } = useTranslation()
-  return (
-    <Dialog
-      open
-      onClose={onDone}
-      title={title}
-      {...(description === undefined ? {} : { description })}
-    >
-      <form className="flex flex-col gap-4" noValidate onSubmit={onSubmit}>
-        {children}
-        <div className="flex justify-end gap-2 pb-5">
-          <Button variant="outline" onClick={onDone}>
-            {t('common.cancel')}
-          </Button>
-          <Button type="submit" disabled={busy}>
-            {busy && <Loader2 aria-hidden className="animate-spin" />}
-            {submitLabel}
-          </Button>
-        </div>
-      </form>
-    </Dialog>
-  )
 }
 
 function GenerateKeyDialog({ onDone }: { onDone: () => void }) {

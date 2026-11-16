@@ -116,6 +116,12 @@ export const COMMAND_IDS = [
   'newIdentity',
   'generateKey',
   'importKey',
+  'lockNow',
+  'copyPassword',
+  'masterPassword',
+  'exportData',
+  'importData',
+  'restoreBackup',
 ] as const
 export type CommandId = (typeof COMMAND_IDS)[number]
 
@@ -167,4 +173,10 @@ export const COMMAND_KEYS: Record<CommandId, readonly KeyCombo[]> = {
   zoomOut: [{ code: 'Minus' }],
   zoomReset: [{ code: 'Digit0' }],
   fillSudo: [{ code: 'KeyS', shift: true }],
+  lockNow: [{ code: 'KeyK', shift: true }],
+  copyPassword: [{ code: 'KeyA', shift: true }],
+  masterPassword: [{ code: 'KeyM', shift: true }],
+  exportData: [{ code: 'KeyX', shift: true }],
+  importData: [{ code: 'KeyJ', shift: true }],
+  restoreBackup: [{ code: 'KeyH', shift: true }],
 }

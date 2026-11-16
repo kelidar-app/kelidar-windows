@@ -1,4 +1,4 @@
-import { House, KeyRound, Plus, Search, X } from 'lucide-react'
+import { House, KeyRound, LockKeyhole, Plus, Search, X } from 'lucide-react'
 import { useRef, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { SessionState } from '@shared/session'
@@ -13,8 +13,9 @@ import {
   useTabsStore,
   type TerminalTab,
 } from '@renderer/stores/tabs'
+import { useVaultStore } from '@renderer/stores/security'
 import { useUiStore } from '@renderer/stores/ui'
-import { SHORTCUTS } from './shortcuts'
+import { shortcutOf, SHORTCUTS } from './shortcuts'
 
 const DOT_CLASS: Record<SessionState, string> = {
   connecting: 'bg-amber-500 animate-pulse',
@@ -100,8 +101,34 @@ export function TitleBar() {
         >
           <Search aria-hidden className="size-4" />
         </button>
+        <LockButton />
       </div>
     </header>
+  )
+}
+
+/** Lock now: shown only with a master password (without one there is nothing to unlock with). */
+function LockButton() {
+  const { t } = useTranslation()
+  const canLock = useVaultStore(
+    (state) => state.status.state === 'unlocked' && state.status.masterPassword,
+  )
+  const lock = useVaultStore((state) => state.lock)
+  if (!canLock) return null
+  const shortcut = shortcutOf('lockNow')
+  const label = t('nav.withShortcut', { label: t('security.lockNow'), shortcut: shortcut.label })
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      aria-keyshortcuts={shortcut.aria}
+      data-lock-button=""
+      onClick={() => void lock()}
+      className="app-no-drag mb-1 flex size-7 shrink-0 items-center justify-center rounded-md hover:bg-muted"
+    >
+      <LockKeyhole aria-hidden className="size-4" />
+    </button>
   )
 }
 

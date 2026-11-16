@@ -10,12 +10,15 @@ import {
   SETTINGS_VERSION,
 } from '../../src/shared/settings'
 
-/** The terminal settings every file gets (version 5). */
+/** The terminal settings (version 5) and the lock and clipboard settings (version 6). */
 const TERMINAL = {
   terminalFontFamily: DEFAULT_UI_SETTINGS.terminalFontFamily,
   terminalFontSize: DEFAULT_UI_SETTINGS.terminalFontSize,
   terminalLineHeight: DEFAULT_UI_SETTINGS.terminalLineHeight,
   pasteGuard: true,
+  autoLockMinutes: 15 as const,
+  lockOnWindowsLock: true,
+  clipboardClearSeconds: 30 as const,
 }
 
 describe('migrateSettings', () => {
@@ -127,7 +130,7 @@ describe('SettingsStore', () => {
     })
   })
 
-  it('migrates a version 1 file and saves it as version 5', async () => {
+  it('migrates a version 1 file and saves it as the current version', async () => {
     await writeFile(file, JSON.stringify({ version: 1, language: 'fa', theme: 'dark' }))
     const store = await SettingsStore.open({ directory: dir, defaultLanguage: 'en' })
     expect(store.getUi()).toEqual({
@@ -139,7 +142,7 @@ describe('SettingsStore', () => {
       ...TERMINAL,
     })
     expect(await readJson()).toEqual({
-      version: 5,
+      version: SETTINGS_VERSION,
       language: 'fa',
       theme: 'dark',
       terminalTheme: 'kelidar',
@@ -147,6 +150,34 @@ describe('SettingsStore', () => {
       agent: 'auto',
       ...TERMINAL,
     })
+  })
+
+  it('adds the lock and clipboard settings to a version 5 file', async () => {
+    await writeFile(
+      file,
+      JSON.stringify({
+        version: 5,
+        language: 'en',
+        theme: 'system',
+        terminalTheme: 'kelidar',
+        hostsView: 'list',
+        agent: 'auto',
+        terminalFontFamily: 'Consolas',
+        terminalFontSize: 16,
+        terminalLineHeight: 1.2,
+        pasteGuard: false,
+      }),
+    )
+    const store = await SettingsStore.open({ directory: dir, defaultLanguage: 'en' })
+    expect(store.getUi()).toMatchObject({
+      hostsView: 'list',
+      terminalFontSize: 16,
+      pasteGuard: false,
+      autoLockMinutes: 15,
+      lockOnWindowsLock: true,
+      clipboardClearSeconds: 30,
+    })
+    expect(await readJson()).toMatchObject({ version: SETTINGS_VERSION, autoLockMinutes: 15 })
   })
 
   it('saves updates atomically and keeps other fields', async () => {
@@ -168,7 +199,7 @@ describe('SettingsStore', () => {
       ...TERMINAL,
     })
     expect(await readJson()).toEqual({
-      version: 5,
+      version: SETTINGS_VERSION,
       language: 'fa',
       theme: 'light',
       terminalTheme: 'contrast',
@@ -189,7 +220,7 @@ describe('SettingsStore', () => {
     ])
     await store.flush()
     expect(await readJson()).toEqual({
-      version: 5,
+      version: SETTINGS_VERSION,
       language: 'fa',
       theme: 'light',
       terminalTheme: 'kelidar',

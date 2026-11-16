@@ -1,7 +1,16 @@
 import path from 'node:path'
 import os from 'node:os'
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeTheme } from 'electron'
-import { APP_ORIGIN } from '@shared/app'
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  dialog,
+  ipcMain,
+  Menu,
+  nativeTheme,
+  powerMonitor,
+} from 'electron'
+import { APP, APP_ORIGIN } from '@shared/app'
 import { pickDefaultLanguage, type Theme } from '@shared/settings'
 import { configureAppPaths } from './app-paths'
 import { GroupService } from './hosts/group-service'
@@ -11,6 +20,7 @@ import { KeyFileImports } from './hosts/key-files'
 import { registerIpcHandlers } from './ipc/handlers'
 import { registerHostHandlers } from './ipc/host-handlers'
 import { registerKeychainHandlers } from './ipc/keychain-handlers'
+import { registerSecurityHandlers } from './ipc/security-handlers'
 import { registerSessionHandlers } from './ipc/session-handlers'
 import { createSinkRegistry } from './ipc/web-contents-sink'
 import { createIpcRouter } from './ipc/router'
@@ -20,6 +30,8 @@ import { IdentityService } from './keychain/identity-service'
 import { KeyService } from './keychain/key-service'
 import { countAgentKeys, openSshAgent, PageantAgent, pagentExePath } from './platform/agent'
 import { applyWindowsAppIdentity } from './platform/windows'
+import { AutoLock } from './security/auto-lock'
+import { SecretClipboard } from './security/secret-clipboard'
 import { handleAppProtocol, registerAppScheme } from './security/app-protocol'
 import { applyDevelopmentCsp, denyAllPermissions, denyNavigationAndPopups } from './security/harden'
 import { SettingsStore } from './settings/store'
@@ -27,10 +39,11 @@ import { KnownHosts } from './ssh/host-keys'
 import { PromptBroker } from './ssh/prompts'
 import { quickConnectTarget } from './ssh/quick-target'
 import { SessionManager } from './ssh/session-manager'
+import { DataTransfer } from './vault/data-transfer'
+import { EXPORT_EXTENSION } from './vault/export-file'
 import { runVaultSelfTest, VAULT_SELF_TEST_FLAG } from './vault/self-test'
 import { createSafeStorageWrapper } from './vault/safe-storage-wrapper'
 import { VaultService } from './vault/service'
-import { Vault } from './vault/vault'
 import { createMainWindow } from './window'
 
 configureAppPaths()
@@ -101,9 +114,10 @@ async function start(): Promise<void> {
     },
   })
 
-  const vaults = new VaultService(() =>
-    Vault.open({ directory: app.getPath('userData'), wrapper: createSafeStorageWrapper() }),
-  )
+  const vaults = new VaultService({
+    directory: app.getPath('userData'),
+    wrapper: createSafeStorageWrapper(),
+  })
   const keyFiles = new KeyFileImports()
   const hosts = new HostService(vaults, keyFiles)
   const groups = new GroupService(vaults)
@@ -135,10 +149,60 @@ async function start(): Promise<void> {
       })
     },
   })
+  const upgrades = new KeyUpgrades({
+    vaults,
+    hosts,
+    keys,
+    runCommand: (owner, target, command, options) =>
+      sessions.runCommand(owner, target, command, options),
+  })
+  const secretClipboard = new SecretClipboard(
+    {
+      writeText: (text) => clipboard.writeText(text),
+      readText: () => clipboard.readText(),
+      clear: () => {
+        clipboard.clear()
+      },
+    },
+    () => settings.getUi().clipboardClearSeconds,
+  )
+  const transfer = new DataTransfer(vaults)
+
+  // Locked: secrets leave memory (sessions stay open), and every window is told.
+  vaults.onChange((status) => {
+    if (status.state === 'locked') {
+      sessions.forgetSecrets()
+      keyFiles.clear()
+      upgrades.clear()
+      void secretClipboard.clear()
+    }
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) win.webContents.send('vault:state', status)
+    }
+  })
+  const autoLock = new AutoLock({
+    idleSeconds: () => powerMonitor.getSystemIdleTime(),
+    onSystemLock: (listener) => {
+      powerMonitor.on('lock-screen', listener)
+      powerMonitor.on('suspend', listener)
+      return () => {
+        powerMonitor.off('lock-screen', listener)
+        powerMonitor.off('suspend', listener)
+      }
+    },
+    settings: () => settings.getUi(),
+    lock: () => {
+      void vaults.lock()
+    },
+  })
+  autoLock.start()
+
   const sinkOf = createSinkRegistry((sink) => {
     sessions.closeAllFor(sink)
   })
   app.on('before-quit', () => {
+    autoLock.stop()
+    void secretClipboard.clear()
     sessions.closeAll()
   })
 
@@ -197,14 +261,44 @@ async function start(): Promise<void> {
     keys,
     identities,
     agents,
-    upgrades: new KeyUpgrades({
-      vaults,
-      hosts,
-      keys,
-      runCommand: (owner, target, command, options) =>
-        sessions.runCommand(owner, target, command, options),
-    }),
+    upgrades,
     ownerOf: (event) => sinkOf(event.sender),
+  })
+
+  registerSecurityHandlers(router, {
+    vaults,
+    hosts,
+    identities,
+    clipboard: secretClipboard,
+    transfer,
+    chooseExportPath: async (event) => {
+      const owner = BrowserWindow.fromWebContents(event.sender)
+      const day = new Date().toISOString().slice(0, 10)
+      const options: Electron.SaveDialogOptions = {
+        defaultPath: path.join(
+          app.getPath('documents'),
+          `${APP.protocolHost}-backup-${day}.${EXPORT_EXTENSION}`,
+        ),
+        filters: [{ name: APP.name, extensions: [EXPORT_EXTENSION] }],
+        properties: ['dontAddToRecent', 'showOverwriteConfirmation'],
+      }
+      const result = await (owner === null
+        ? dialog.showSaveDialog(options)
+        : dialog.showSaveDialog(owner, options))
+      return result.canceled || result.filePath === '' ? null : result.filePath
+    },
+    chooseImportPath: async (event) => {
+      const owner = BrowserWindow.fromWebContents(event.sender)
+      const options: Electron.OpenDialogOptions = {
+        properties: ['openFile', 'dontAddToRecent'],
+        filters: [{ name: APP.name, extensions: [EXPORT_EXTENSION] }],
+        defaultPath: app.getPath('documents'),
+      }
+      const result = await (owner === null
+        ? dialog.showOpenDialog(options)
+        : dialog.showOpenDialog(owner, options))
+      return result.canceled ? null : (result.filePaths[0] ?? null)
+    },
   })
 
   registerSessionHandlers(router, {

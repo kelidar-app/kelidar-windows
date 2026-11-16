@@ -22,8 +22,11 @@ export function testEnv(userData: string): Record<string, string> {
   return env
 }
 
-/** Starts the built app (out/) with its own user data folder. */
-export async function launch(userData: string): Promise<Launched> {
+/**
+ * Starts the built app (out/) with its own user data folder. `ready: 'lock'`
+ * waits for the lock screen instead (a vault with a master password).
+ */
+export async function launch(userData: string, ready: 'app' | 'lock' = 'app'): Promise<Launched> {
   const app = await electron.launch({ args: ['.'], env: testEnv(userData) })
   launched.push(app)
   const page = await app.firstWindow()
@@ -31,7 +34,8 @@ export async function launch(userData: string): Promise<Launched> {
   page.on('console', (message) => {
     if (message.type() === 'error') consoleErrors.push(message.text())
   })
-  await page.getByRole('navigation').waitFor()
+  if (ready === 'app') await page.getByRole('navigation').waitFor()
+  else await page.locator('[data-lock-screen]').waitFor()
   return { app, page, consoleErrors }
 }
 
