@@ -358,6 +358,39 @@ test('Phase 2 smoke: organize hosts, search, palette and shortcuts', async () =>
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl')
     await expect(page.getByRole('heading', { name: 'هاست‌ها', exact: true })).toBeVisible()
 
+    // In Persian a split tab keeps its geometry: the tab dropped on the right
+    // half earlier (now the focused pane) is still on the right, not mirrored.
+    await page.locator('[data-tab-state]', { hasText: 'Behind' }).first().click()
+    const visiblePanes = page.locator('[data-tab-view] [data-pane-id]:visible')
+    await expect(visiblePanes).toHaveCount(2)
+    const [droppedBox, otherBox] = await Promise.all([
+      page.locator('[data-tab-view] [data-pane-id][data-focused]:visible').boundingBox(),
+      page.locator('[data-tab-view] [data-pane-id]:not([data-focused]):visible').boundingBox(),
+    ])
+    if (droppedBox === null || otherBox === null) throw new Error('panes not visible')
+    expect(droppedBox.x).toBeGreaterThan(otherBox.x)
+    expect(otherBox.x + otherBox.width).toBeLessThanOrEqual(droppedBox.x + 1)
+
+    // Shortcuts inside Persian sentences keep their own order ("Ctrl+=", not "=+Ctrl").
+    await page.keyboard.press('Control+,')
+    const zoomHint = page.locator('p', { hasText: 'Ctrl+=' })
+    const shortcutOrder = await zoomHint.evaluate((element) => {
+      const node = element.firstChild
+      const text = node?.textContent ?? ''
+      const x = (index: number): number => {
+        const range = document.createRange()
+        range.setStart(node as Node, index)
+        range.setEnd(node as Node, index + 1)
+        return range.getBoundingClientRect().x
+      }
+      return ['Ctrl+=', 'Ctrl+-', 'Ctrl+0'].map((key) => {
+        const at = text.indexOf(key)
+        return x(at) < x(at + key.length - 1)
+      })
+    })
+    expect(shortcutOrder).toEqual([true, true, true])
+    await page.keyboard.press('Control+1')
+
     expect(consoleErrors).toEqual([])
     const pageText = await page.evaluate(() => document.documentElement.outerHTML)
     expect(pageText).not.toContain(PASSWORD)

@@ -3,6 +3,7 @@ import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import en from '../../src/renderer/i18n/en.json'
 import fa from '../../src/renderer/i18n/fa.json'
+import { isolateValue } from '../../src/renderer/i18n'
 import { ERROR_CODES } from '../../src/shared/errors'
 
 type Tree = { [key: string]: string | Tree }
@@ -35,6 +36,12 @@ describe('translations', () => {
       expect(persian.trim(), key).not.toBe('')
       expect(placeholders(persian), key).toEqual(placeholders(text))
     }
+  })
+
+  it('isolate inserted values in right-to-left text only', () => {
+    // Without isolation, "Ctrl+0" inside a Persian sentence shows as "0+Ctrl".
+    expect(isolateValue('Ctrl+0', 'rtl')).toBe('\u2068Ctrl+0\u2069')
+    expect(isolateValue('root@203.0.113.7:2222', 'ltr')).toBe('root@203.0.113.7:2222')
   })
 
   it('translate every error code', () => {
@@ -91,6 +98,16 @@ describe('right-to-left layout', () => {
         if (PHYSICAL_CSS.test(line))
           problems.push(`${path.relative(rendererDir, file)}:${String(index + 1)}: ${line.trim()}`)
       })
+    }
+    expect(problems).toEqual([])
+  })
+
+  it('has no invisible direction characters in the code (use \\u escapes instead)', async () => {
+    const problems: string[] = []
+    for (const root of ['src', 'tests']) {
+      for (const file of await filesUnder(path.resolve(root), ['.ts', '.tsx', '.css', '.json'])) {
+        if (/[\u202a-\u202e\u2066-\u2069]/.test(await readFile(file, 'utf8'))) problems.push(file)
+      }
     }
     expect(problems).toEqual([])
   })

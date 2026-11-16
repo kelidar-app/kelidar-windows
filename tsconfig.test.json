@@ -17,6 +17,7 @@
     "src/main/**/*",
     "src/shared/**/*",
     "src/renderer/i18n/*.json",
+    "src/renderer/i18n/index.ts",
     "src/renderer/features/terminal/themes.ts",
     "src/renderer/features/hosts/host-search.ts",
     "src/renderer/lib/fuzzy.ts",

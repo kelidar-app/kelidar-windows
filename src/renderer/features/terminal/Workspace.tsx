@@ -66,19 +66,22 @@ export function Workspace() {
           if (pane === undefined || where === undefined) return null
           const visible = where.tab.id === activeId
           return (
+            // The box is placed in the LTR container (physical
+            // geometry); only what is inside it follows the app's direction.
             <div
               key={id}
-              dir={i18n.dir()}
               data-tab-id={where.tab.id}
               className={cn('absolute min-h-0 min-w-0', visible ? 'flex' : 'hidden')}
               style={placement(where.rect)}
             >
-              <TerminalPane
-                pane={pane}
-                visible={visible}
-                focused={where.tab.focusedPaneId === id}
-                split={where.split}
-              />
+              <div dir={i18n.dir()} className="flex min-h-0 min-w-0 flex-1">
+                <TerminalPane
+                  pane={pane}
+                  visible={visible}
+                  focused={where.tab.focusedPaneId === id}
+                  split={where.split}
+                />
+              </div>
             </div>
           )
         })}
