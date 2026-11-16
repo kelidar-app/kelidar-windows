@@ -35,6 +35,8 @@ export interface TestServerOptions {
   tmux?: boolean
   /** Refuse to forward TCP for jump host use (AllowTcpForwarding no). */
   noForwarding?: boolean
+  /** Hold back the answer to the tmux check this long (to close a tab while it waits). */
+  probeDelayMs?: number
 }
 
 export interface TestServer {
@@ -234,6 +236,20 @@ export async function startTestServer(options: TestServerOptions = {}): Promise<
           ;(accept as (() => void) | undefined)?.()
         })
         session.on('exec', (accept, _reject, info) => {
+          if (options.probeDelayMs !== undefined && info.command.startsWith('command -v tmux')) {
+            state.execs.push(info.command)
+            setTimeout(() => {
+              // The client may be gone by now; accepting then is harmless.
+              try {
+                const late = accept()
+                late.exit(0)
+                late.end()
+              } catch {
+                // Connection already closed.
+              }
+            }, options.probeDelayMs)
+            return
+          }
           const stream = accept()
           state.execs.push(info.command)
           // Sticky sessions: the tmux check, then the shell inside tmux.

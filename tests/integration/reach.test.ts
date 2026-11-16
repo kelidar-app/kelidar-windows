@@ -321,6 +321,23 @@ describe('sessions', () => {
     expect(srv.received.join('').split('htop\r')).toHaveLength(2)
   })
 
+  it('closing a tab while the tmux check runs ends quietly (no crash)', async () => {
+    const h = await setup()
+    const stop = trustAll(h)
+    const srv = await server({ tmux: true, probeDelayMs: 300 })
+    const host = await saveHost(h, { name: 'sticky', port: srv.port, stickySession: true })
+    const id = await open(h, host.id)
+    await waitFor(() => srv.execs.some((command) => command.startsWith('command -v tmux')), {
+      label: 'tmux check sent',
+    })
+    await h.call('session:close', { sessionId: id })
+    // Let ssh2 report the dropped check; an uncaught exception would fail this test.
+    await new Promise((resolve) => setTimeout(resolve, 600))
+    stop()
+    expect(h.sink.states(id).at(-1)).toMatchObject({ state: 'closed' })
+    expect(srv.openShells()).toBe(0)
+  })
+
   it('opens a normal shell and says so when tmux is missing', async () => {
     const h = await setup()
     const stop = trustAll(h)

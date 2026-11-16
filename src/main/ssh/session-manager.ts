@@ -544,10 +544,21 @@ export class SessionManager {
   /** A TCP channel from a jump host to the next server, used as that server's socket. */
   private forward(client: Client, hop: Hop, next: Hop): Promise<Duplex> {
     return new Promise((resolve, reject) => {
-      client.forwardOut('127.0.0.1', 0, next.target.address, next.target.port, (error, stream) => {
-        if (error instanceof Error) reject(new LinkFailure('JUMP_FORWARD_FAILED', hop))
-        else resolve(stream)
-      })
+      try {
+        client.forwardOut(
+          '127.0.0.1',
+          0,
+          next.target.address,
+          next.target.port,
+          (error, stream) => {
+            if (error instanceof Error) reject(new LinkFailure('JUMP_FORWARD_FAILED', hop))
+            else resolve(stream)
+          },
+        )
+      } catch {
+        // ssh2 throws "Not connected" when the jump host just went away.
+        reject(new LinkFailure('SSH_CONNECTION_LOST', hop))
+      }
     })
   }
 
@@ -807,19 +818,47 @@ export class SessionManager {
   // --- Channels ------------------------------------------------------------
 
   private openChannel(session: Session, client: Client): void {
-    if (FINAL_STATES.has(session.state)) return
+    if (!this.waitsForChannel(session, client)) return
     if (session.exec !== undefined) this.runExec(session, client)
     else if (session.stickyName !== undefined) this.openSticky(session, client, session.stickyName)
     else this.openShell(session, client, undefined)
   }
 
-  private openShell(session: Session, client: Client, sticky: 'unavailable' | undefined): void {
-    client.shell(
-      { term: 'xterm-256color', cols: session.cols, rows: session.rows, width: 0, height: 0 },
-      (error, stream) => {
-        this.attach(session, error, stream, sticky)
-      },
+  /**
+   * A channel is only opened, or its failure reported, while the session still
+   * waits for one on this connection. The tab may have closed meanwhile (the
+   * connection ended), or the connection may have dropped (the link
+   * reconnects and opens a new channel then).
+   */
+  private waitsForChannel(session: Session, client: Client): boolean {
+    return (
+      !FINAL_STATES.has(session.state) && session.link.is('ready') && session.link.client === client
     )
+  }
+
+  /**
+   * Runs one of ssh2's channel calls, which throw "Not connected" when the
+   * socket is already gone, instead of reporting through the callback.
+   */
+  private tryChannel(session: Session, client: Client, open: () => void): void {
+    try {
+      open()
+    } catch {
+      if (this.waitsForChannel(session, client)) {
+        this.finishSession(session, 'error', 'SSH_SHELL_FAILED')
+      }
+    }
+  }
+
+  private openShell(session: Session, client: Client, sticky: 'unavailable' | undefined): void {
+    this.tryChannel(session, client, () => {
+      client.shell(
+        { term: 'xterm-256color', cols: session.cols, rows: session.rows, width: 0, height: 0 },
+        (error, stream) => {
+          this.attach(session, client, error, stream, sticky)
+        },
+      )
+    })
   }
 
   /**
@@ -829,31 +868,36 @@ export class SessionManager {
    */
   private openSticky(session: Session, client: Client, name: string): void {
     const probe = `command -v tmux >/dev/null 2>&1 || exit 127; tmux has-session -t ${name} 2>/dev/null && exit 3; exit 0`
-    client.exec(probe, (error, stream) => {
-      if (error instanceof Error) {
-        this.openShell(session, client, 'unavailable')
-        return
-      }
-      let code: number | null = null
-      stream.on('exit', (exitCode: number | null) => {
-        code = exitCode
-      })
-      stream.resume()
-      stream.on('close', () => {
-        if (FINAL_STATES.has(session.state)) return
-        if (code !== 0 && code !== 3) {
+    this.tryChannel(session, client, () => {
+      client.exec(probe, (error, stream) => {
+        if (!this.waitsForChannel(session, client)) return
+        if (error instanceof Error) {
           this.openShell(session, client, 'unavailable')
           return
         }
-        const pty = {
-          term: 'xterm-256color',
-          cols: session.cols,
-          rows: session.rows,
-          width: 0,
-          height: 0,
-        }
-        client.exec(`tmux new-session -A -s ${name}`, { pty }, (execError, shell) => {
-          this.attach(session, execError, shell, code === 3 ? 'resumed' : 'started')
+        let code: number | null = null
+        stream.on('exit', (exitCode: number | null) => {
+          code = exitCode
+        })
+        stream.resume()
+        stream.on('close', () => {
+          if (!this.waitsForChannel(session, client)) return
+          if (code !== 0 && code !== 3) {
+            this.openShell(session, client, 'unavailable')
+            return
+          }
+          const pty = {
+            term: 'xterm-256color',
+            cols: session.cols,
+            rows: session.rows,
+            width: 0,
+            height: 0,
+          }
+          this.tryChannel(session, client, () => {
+            client.exec(`tmux new-session -A -s ${name}`, { pty }, (execError, shell) => {
+              this.attach(session, client, execError, shell, code === 3 ? 'resumed' : 'started')
+            })
+          })
         })
       })
     })
@@ -861,16 +905,17 @@ export class SessionManager {
 
   private attach(
     session: Session,
+    client: Client,
     error: Error | undefined,
     stream: ClientChannel,
     sticky: 'started' | 'resumed' | 'unavailable' | undefined,
   ): void {
-    if (error instanceof Error) {
-      this.finishSession(session, 'error', 'SSH_SHELL_FAILED')
+    if (!this.waitsForChannel(session, client)) {
+      if (!(error instanceof Error)) stream.close()
       return
     }
-    if (FINAL_STATES.has(session.state)) {
-      stream.close()
+    if (error instanceof Error) {
+      this.finishSession(session, 'error', 'SSH_SHELL_FAILED')
       return
     }
     const link = session.link
@@ -908,7 +953,14 @@ export class SessionManager {
   private runExec(session: Session, client: Client): void {
     const exec = session.exec
     if (exec === undefined) return
+    this.tryChannel(session, client, () => {
+      this.execCommand(session, client, exec)
+    })
+  }
+
+  private execCommand(session: Session, client: Client, exec: NonNullable<Session['exec']>): void {
     client.exec(exec.command, (error, stream) => {
+      if (!this.waitsForChannel(session, client)) return
       if (error instanceof Error) {
         this.finishSession(session, 'error', 'SSH_SHELL_FAILED')
         return
