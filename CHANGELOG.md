@@ -6,6 +6,27 @@ All notable changes to this project are documented here. The project uses
 from the [Conventional Commit](https://www.conventionalcommits.org/) messages
 merged since the last release, so this file is not edited by hand.
 
+## [0.2.0](https://github.com/kelidar-app/kelidar-windows/compare/v0.1.0...v0.2.0) (2026-11-17)
+
+
+### Features
+
+* **hosts:** groups, tags, favorites, search and a command palette ([a1fe2db](https://github.com/kelidar-app/kelidar-windows/commit/a1fe2dba91a99ca5b129ef2fba0fcaeede23a0b1))
+* **hosts:** import from ssh config and PuTTY, Smart Paste, notes, links and system badges ([0fcc7c4](https://github.com/kelidar-app/kelidar-windows/commit/0fcc7c43c075db2dda34fc928349b2c3b498b2ce))
+* **hosts:** move hosts and groups by drag and drop ([0842009](https://github.com/kelidar-app/kelidar-windows/commit/0842009fd8985e79368d2587e06be7e7e12ff908))
+* **keychain:** identities, a key manager, SSH agent and upgrade to key login ([e467961](https://github.com/kelidar-app/kelidar-windows/commit/e4679612db74e783cb79f71569c99b92ec16e01b))
+* **security:** master password, lock screen, auto-lock, password copy and backups ([f2cc0f8](https://github.com/kelidar-app/kelidar-windows/commit/f2cc0f80a043eae23939d11645fc2b6e211c6eb1))
+* **ssh:** jump hosts, proxies, auto-reconnect, sticky sessions and a startup command ([895a20f](https://github.com/kelidar-app/kelidar-windows/commit/895a20f57314e998083697d7a6244fcd820c3ae6))
+* **terminal:** drag a tab into another tab to see both side by side ([ff1acd1](https://github.com/kelidar-app/kelidar-windows/commit/ff1acd16bb17c1514a39caffc9462155747877b5))
+* **terminal:** split panes, search, links, fonts, zoom, paste guard and sudo fill ([ad5621c](https://github.com/kelidar-app/kelidar-windows/commit/ad5621c4ce4e5adf0d3fa4e9cf511254d146c55b))
+* **updates:** update from GitHub Releases with "Restart to update", version in Settings ([45e6e5d](https://github.com/kelidar-app/kelidar-windows/commit/45e6e5dc77fb1cbc5f0a03ad5ef1db1263c455ca))
+
+
+### Bug Fixes
+
+* **ssh:** closing a tab while it connects no longer crashes the app ([2060bc2](https://github.com/kelidar-app/kelidar-windows/commit/2060bc2f38d21ce78cd4882077fa68aa6f62fc0c))
+* **terminal:** split panes and shortcuts no longer mix up in Persian ([b498277](https://github.com/kelidar-app/kelidar-windows/commit/b4982777153d28123a7b83d640834a8d560668ad))
+
 ## [0.1.0](https://github.com/kelidar-app/kelidar-windows/releases/tag/v0.1.0) (2026-11-16)
 
 First preview build: phases 0 and 1 of the roadmap. Save a host, check its key and open a terminal.
