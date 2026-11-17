@@ -12,7 +12,9 @@ import { PromptDialogs } from '@renderer/features/sessions/PromptDialogs'
 import { SettingsView } from '@renderer/features/settings/SettingsView'
 import { Workspace } from '@renderer/features/terminal/Workspace'
 import { PasteGuardDialog } from '@renderer/features/terminal/PasteGuardDialog'
+import { RestartDialog } from '@renderer/features/settings/RestartDialog'
 import { subscribeToHostOs } from '@renderer/stores/hosts'
+import { subscribeToUpdates } from '@renderer/stores/updates'
 import { subscribeToPrompts } from '@renderer/stores/prompts'
 import { subscribeToVault, useVaultStore } from '@renderer/stores/security'
 import { HOME_TAB, startTabs, useTabsStore } from '@renderer/stores/tabs'
@@ -37,7 +39,9 @@ export function App() {
     const stopPrompts = subscribeToPrompts()
     const stopVault = subscribeToVault()
     const stopHostOs = subscribeToHostOs()
+    const stopUpdates = subscribeToUpdates()
     return () => {
+      stopUpdates()
       stopPrompts()
       stopVault()
       stopHostOs()
@@ -93,6 +97,7 @@ function AppShell({
           <KeychainDialogs />
           <SecurityDialogs />
           <ImportDialogs />
+          <RestartDialog />
           <PromptDialogs />
           <PasteGuardDialog />
           <CommandPalette />

@@ -73,6 +73,7 @@ describe('IPC router', () => {
       clipboardClearSeconds: 30 as const,
       detectOs: true,
       importOffered: false,
+      checkUpdates: true,
     }))
     const versionHandler = vi.fn(() => ({ version: '1.2.3' }))
     router.handle('settings:update', handler)
@@ -109,6 +110,7 @@ describe('IPC router', () => {
       clipboardClearSeconds: 30 as const,
       detectOs: true,
       importOffered: false,
+      checkUpdates: true,
     }))
     router.handle('settings:update', handler)
     await call('settings:update', trusted, { theme: 'dark' })
@@ -133,6 +135,7 @@ describe('IPC router', () => {
         clipboardClearSeconds: 30 as const,
         detectOs: true,
         importOffered: false,
+        checkUpdates: true,
         window: { width: 1 },
       }
       return withExtra
@@ -154,6 +157,7 @@ describe('IPC router', () => {
         clipboardClearSeconds: 30 as const,
         detectOs: true,
         importOffered: false,
+        checkUpdates: true,
       },
     })
   })

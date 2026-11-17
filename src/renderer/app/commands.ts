@@ -3,6 +3,7 @@ import { terminalActions } from '@renderer/features/terminal/terminal-registry'
 import { api } from '@renderer/lib/api'
 import { useGroupFormStore, useHostFormStore, useHostsStore } from '@renderer/stores/hosts'
 import { useImportStore } from '@renderer/stores/import'
+import { updateReady, useUpdatesStore } from '@renderer/stores/updates'
 import { useKeychainDialogStore } from '@renderer/stores/keychain'
 import {
   copySavedPassword,
@@ -97,6 +98,23 @@ export const COMMANDS: readonly AppCommand[] = [
   command('shortcuts', 'general', () => {
     useUiStore.getState().setShortcutsOpen(true)
   }),
+  command(
+    'checkUpdates',
+    'general',
+    () => {
+      useUiStore.getState().showSection('settings')
+      void useUpdatesStore.getState().check()
+    },
+    () => useUpdatesStore.getState().status?.state !== 'disabled',
+  ),
+  command(
+    'installUpdate',
+    'general',
+    () => {
+      useUpdatesStore.getState().restart()
+    },
+    updateReady,
+  ),
   command('hosts', 'general', () => {
     useUiStore.getState().showSection('hosts')
   }),

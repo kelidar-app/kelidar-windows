@@ -48,6 +48,7 @@ import {
   type VaultStatus,
 } from './security'
 import { uiSettingsPatchSchema, uiSettingsSchema } from './settings'
+import { updateStatusSchema, type UpdateStatus } from './updates'
 
 /**
  * The single IPC contract between renderer and main. Every channel is listed
@@ -260,6 +261,20 @@ export const ipcContract = {
     request: uiSettingsPatchSchema,
     response: uiSettingsSchema,
   },
+  'update:status': {
+    request: noPayload,
+    response: updateStatusSchema,
+  },
+  /** Checks GitHub Releases now; a new version downloads in the background. */
+  'update:check': {
+    request: noPayload,
+    response: updateStatusSchema,
+  },
+  /** "Restart to update": quits, installs the downloaded version and starts it. */
+  'update:install': {
+    request: noPayload,
+    response: z.undefined(),
+  },
   'vault:status': {
     request: noPayload,
     response: vaultStatusSchema,
@@ -316,6 +331,8 @@ export interface IpcEventPayloads {
   'vault:state': VaultStatus
   /** A host's system was read after its first connection. */
   'host:os': { hostId: string; os: HostOs }
+  /** Update checks, download progress, and "ready to install". */
+  'update:status': UpdateStatus
 }
 export type IpcEventPayload<E extends IpcEvent> = IpcEventPayloads[E]
 

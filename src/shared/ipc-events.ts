@@ -10,6 +10,7 @@ export const IPC_EVENTS = [
   'prompt:cancel',
   'vault:state',
   'host:os',
+  'update:status',
 ] as const
 
 export type IpcEvent = (typeof IPC_EVENTS)[number]

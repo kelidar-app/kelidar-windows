@@ -8,7 +8,7 @@ export interface SettingsMigration {
   migrate: (data: SettingsData) => SettingsData
 }
 
-/** One step per version. Version 2 added the terminal theme, version 3 the hosts view, version 4 the agent, version 5 terminal fonts and the paste guard, version 6 the lock and clipboard settings, version 7 system detection and the first-run import offer. */
+/** One step per version. Version 2 added the terminal theme, version 3 the hosts view, version 4 the agent, version 5 terminal fonts and the paste guard, version 6 the lock and clipboard settings, version 7 system detection and the first-run import offer, version 8 the update check. */
 export const SETTINGS_MIGRATIONS: readonly SettingsMigration[] = [
   { from: 1, migrate: (v1) => ({ ...v1, version: 2, terminalTheme: 'kelidar' }) },
   { from: 2, migrate: (v2) => ({ ...v2, version: 3, hostsView: 'cards' }) },
@@ -38,6 +38,7 @@ export const SETTINGS_MIGRATIONS: readonly SettingsMigration[] = [
     from: 6,
     migrate: (v6) => ({ ...v6, version: 7, detectOs: true, importOffered: false }),
   },
+  { from: 7, migrate: (v7) => ({ ...v7, version: 8, checkUpdates: true }) },
 ]
 
 export type MigrationResult =

@@ -15,6 +15,7 @@
     "electron.vite.config.ts",
     "electron-builder.config.ts",
     "vitest.config.mts",
-    "playwright.config.ts"
+    "playwright.config.ts",
+    "playwright.screenshots.config.ts"
   ]
 }

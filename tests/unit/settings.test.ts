@@ -10,7 +10,7 @@ import {
   SETTINGS_VERSION,
 } from '../../src/shared/settings'
 
-/** Settings added after version 4: terminal (5), lock and clipboard (6), system detection and import offer (7). */
+/** Settings added after version 4: terminal (5), lock and clipboard (6), system detection and import offer (7), update check (8). */
 const TERMINAL = {
   terminalFontFamily: DEFAULT_UI_SETTINGS.terminalFontFamily,
   terminalFontSize: DEFAULT_UI_SETTINGS.terminalFontSize,
@@ -21,6 +21,7 @@ const TERMINAL = {
   clipboardClearSeconds: 30 as const,
   detectOs: true,
   importOffered: false,
+  checkUpdates: true,
 }
 
 describe('migrateSettings', () => {

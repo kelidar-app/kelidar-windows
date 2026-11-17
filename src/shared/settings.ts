@@ -3,7 +3,7 @@ import { agentSourceSchema } from './keychain'
 import { AUTO_LOCK_MINUTES, CLIPBOARD_CLEAR_SECONDS } from './security'
 
 /** Bump this and add a migration in src/main/settings/migrations.ts when the shape changes. */
-export const SETTINGS_VERSION = 7
+export const SETTINGS_VERSION = 8
 
 export const LANGUAGES = ['en', 'fa'] as const
 export const languageSchema = z.enum(LANGUAGES)
@@ -73,6 +73,8 @@ export const settingsFileSchema = z.object({
   detectOs: z.boolean(),
   /** The first-run import offer was shown (or there was nothing to import). */
   importOffered: z.boolean(),
+  /** Look for a new version on GitHub Releases when the app starts. */
+  checkUpdates: z.boolean(),
   window: windowStateSchema.optional(),
 })
 export type SettingsFile = z.infer<typeof settingsFileSchema>
@@ -93,6 +95,7 @@ export const uiSettingsSchema = z.object({
   clipboardClearSeconds: clipboardClearSecondsSchema,
   detectOs: z.boolean(),
   importOffered: z.boolean(),
+  checkUpdates: z.boolean(),
 })
 export type UiSettings = z.infer<typeof uiSettingsSchema>
 
@@ -112,6 +115,7 @@ export const uiSettingsPatchSchema = z
     clipboardClearSeconds: clipboardClearSecondsSchema.optional(),
     detectOs: z.boolean().optional(),
     importOffered: z.boolean().optional(),
+    checkUpdates: z.boolean().optional(),
   })
   .refine((patch) => Object.keys(patch).length > 0, { message: 'Empty patch' })
 export type UiSettingsPatch = z.infer<typeof uiSettingsPatchSchema>
@@ -131,6 +135,7 @@ export const DEFAULT_UI_SETTINGS: UiSettings = {
   clipboardClearSeconds: 30,
   detectOs: true,
   importOffered: false,
+  checkUpdates: true,
 }
 
 /** Persian when the system prefers it, otherwise English. */

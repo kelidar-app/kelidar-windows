@@ -124,6 +124,8 @@ export const COMMAND_IDS = [
   'restoreBackup',
   'importHosts',
   'smartPaste',
+  'checkUpdates',
+  'installUpdate',
 ] as const
 export type CommandId = (typeof COMMAND_IDS)[number]
 
@@ -183,4 +185,6 @@ export const COMMAND_KEYS: Record<CommandId, readonly KeyCombo[]> = {
   restoreBackup: [{ code: 'KeyH', shift: true }],
   importHosts: [{ code: 'KeyU', shift: true }],
   smartPaste: [{ code: 'KeyB', shift: true }],
+  checkUpdates: [{ code: 'KeyY', shift: true }],
+  installUpdate: [{ code: 'KeyQ', shift: true }],
 }

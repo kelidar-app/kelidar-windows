@@ -1,4 +1,4 @@
-import { House, KeyRound, LockKeyhole, Plus, Search, X } from 'lucide-react'
+import { House, KeyRound, LockKeyhole, Plus, RotateCcw, Search, X } from 'lucide-react'
 import { useRef, type KeyboardEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { SessionState } from '@shared/session'
@@ -14,6 +14,7 @@ import {
   type TerminalTab,
 } from '@renderer/stores/tabs'
 import { useVaultStore } from '@renderer/stores/security'
+import { useUpdatesStore } from '@renderer/stores/updates'
 import { useUiStore } from '@renderer/stores/ui'
 import { shortcutOf, SHORTCUTS } from './shortcuts'
 
@@ -101,9 +102,37 @@ export function TitleBar() {
         >
           <Search aria-hidden className="size-4" />
         </button>
+        <UpdateButton />
         <LockButton />
       </div>
     </header>
+  )
+}
+
+/** Shown once a new version has downloaded. */
+function UpdateButton() {
+  const { t } = useTranslation()
+  const version = useUpdatesStore((state) =>
+    state.status?.state === 'ready' ? (state.status.version ?? '') : null,
+  )
+  const restart = useUpdatesStore((state) => state.restart)
+  if (version === null) return null
+  const shortcut = shortcutOf('installUpdate')
+  return (
+    <button
+      type="button"
+      data-update-button=""
+      title={t('nav.withShortcut', {
+        label: t('updates.readyShort', { version }),
+        shortcut: shortcut.label,
+      })}
+      aria-keyshortcuts={shortcut.aria}
+      onClick={restart}
+      className="app-no-drag mb-1 flex h-7 shrink-0 items-center gap-1.5 rounded-md bg-primary px-2.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+    >
+      <RotateCcw aria-hidden className="size-3.5" />
+      {t('updates.restart')}
+    </button>
   )
 }
 

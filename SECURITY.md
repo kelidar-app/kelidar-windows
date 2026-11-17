@@ -37,6 +37,11 @@ boundary between the main process and the renderer, and the release workflows in
 
 Out of scope: problems in Electron, ssh2 or other dependencies that are already public (report
 them upstream; we will update), and attacks that need an attacker who already runs code as your
-Windows user.
+Windows user while the vault is unlocked. With a master password set, reading a locked vault or
+its backups without the password is in scope.
+
+Updates come from this repository's GitHub Releases. Until the installer is code-signed, an
+update is checked against the SHA-512 hash in the release's `latest.yml`, which protects against
+a damaged download but not against a compromised release. Problems in that chain are in scope.
 
 The security design is described in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) (in Persian).

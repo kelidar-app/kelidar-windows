@@ -22,6 +22,8 @@ import { parseOsRelease } from '../../../src/main/hosts/os-release'
 import { HostImports, type ImportSourcesDeps } from '../../../src/main/importers/import-service'
 import { registerImportHandlers } from '../../../src/main/ipc/import-handlers'
 import { registerSecurityHandlers } from '../../../src/main/ipc/security-handlers'
+import { registerUpdateHandlers } from '../../../src/main/ipc/update-handlers'
+import { UpdateService, type UpdaterLike } from '../../../src/main/updates/update-service'
 import { OS_RELEASE_COMMAND } from '../../../src/shared/host-extras'
 import { registerSessionHandlers } from '../../../src/main/ipc/session-handlers'
 import { SecretClipboard } from '../../../src/main/security/secret-clipboard'
@@ -116,6 +118,8 @@ export async function createHarness(
     osProbe?: boolean
     /** What "Import hosts" finds; nothing by default. */
     importSources?: Partial<ImportSourcesDeps>
+    /** electron-updater's stand-in; a development build (no updates) by default. */
+    updater?: UpdaterLike
   } = {},
 ) {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'kelidar-it-'))
@@ -254,6 +258,16 @@ export async function createHarness(
       readPutty: () => Promise.resolve(null),
       readKeyFile: () => Promise.reject(new Error('no key files')),
       ...options.importSources,
+    }),
+  })
+
+  registerUpdateHandlers(router, {
+    updates: new UpdateService({
+      updater: options.updater ?? null,
+      currentVersion: '0.2.0',
+      emit: (status) => {
+        sink.send('update:status', status)
+      },
     }),
   })
 

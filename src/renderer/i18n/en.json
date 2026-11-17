@@ -164,7 +164,10 @@
     "IMPORT_FILE_INVALID": "This is not a {{appName}} backup file, or it is damaged. Choose a file made with \"Export a backup file\".",
     "IMPORT_FILE_NEWER": "This backup was made by a newer version of {{appName}}. Install the latest version, then import it again.",
     "IMPORT_PASSWORD_WRONG": "That password does not open this backup file. Type the password chosen when the file was exported.",
-    "IMPORT_EXPIRED": "This import was open too long and has been closed. Start it again."
+    "IMPORT_EXPIRED": "This import was open too long and has been closed. Start it again.",
+    "UPDATE_CHECK_FAILED": "Could not check for updates. Check the internet connection, then choose Check for updates again.",
+    "UPDATE_DOWNLOAD_FAILED": "The update could not be downloaded. Check the internet connection and free disk space, then choose Check for updates again.",
+    "UPDATE_NOT_READY": "No update is ready to install yet. Wait until it has downloaded, then try again."
   },
   "common": {
     "save": "Save",
@@ -450,7 +453,9 @@
     "importData": "Import a backup file",
     "restoreBackup": "Restore an automatic backup",
     "importHosts": "Import hosts from ssh config and PuTTY",
-    "smartPaste": "Smart Paste: fill a host from pasted text"
+    "smartPaste": "Smart Paste: fill a host from pasted text",
+    "checkUpdates": "Check for updates",
+    "installUpdate": "Restart to update"
   },
   "shortcuts": {
     "title": "Keyboard shortcuts",
@@ -718,5 +723,25 @@
     "hide": "Hide password",
     "fill": "Fill the host form",
     "noAddress": "No server address found. Check that the text has the server's IP or host name."
+  },
+  "updates": {
+    "title": "About {{app}}",
+    "version": "Version",
+    "disabled": "This build does not update itself. Updates come with the installed app from Releases.",
+    "idle": "Updates come from GitHub Releases.",
+    "checking": "Checking for updates…",
+    "upToDate": "You have the latest version (checked {{when}}).",
+    "downloading": "Downloading version {{version}}: {{percent}}%",
+    "progress": "Download progress",
+    "ready": "Version {{version}} is ready. Restart to finish updating.",
+    "readyShort": "Version {{version}} is ready",
+    "notes": "What's new in {{version}}",
+    "check": "Check for updates",
+    "restart": "Restart to update",
+    "onStart": "Check for updates when the app starts",
+    "onStartHint": "Only asks GitHub for the list of releases. New versions download in the background and install when you restart.",
+    "confirmTitle": "Restart to update?",
+    "confirmBody_one": "The open terminal will close. Sticky sessions keep running on the server and resume when you connect again.",
+    "confirmBody_other": "The {{count}} open terminals will close. Sticky sessions keep running on the server and resume when you connect again."
   }
 }

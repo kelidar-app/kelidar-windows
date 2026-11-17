@@ -540,6 +540,7 @@ test('Phase 2 security: master password, lock screen, backups, export and import
  * Step 2.6 (Getting data in): the first-run offer finds an ssh config and a
  * PuTTY session and imports them; the imported key signs in and the host
  * gets its system badge; Smart Paste fills the host form; notes and links.
+ * Step 2.7 (Shipping): Settings shows the version and update state.
  */
 test('Phase 2 data in: first-run import, system badge, Smart Paste, notes and links', async () => {
   const userData = await mkdtemp(path.join(os.tmpdir(), 'kelidar-e2e-p2d-'))
@@ -634,6 +635,17 @@ test('Phase 2 data in: first-run import, system badge, Smart Paste, notes and li
     await page.keyboard.press('Control+f')
     await page.keyboard.type('backups')
     await expect(page.locator('[data-host-item]:visible')).toHaveCount(1)
+
+    // Step 2.7: Settings shows the version; a build that is not installed does not update itself.
+    const { version } = JSON.parse(await readFile('package.json', 'utf8')) as { version: string }
+    await page.keyboard.press('Control+,')
+    await expect(page.locator('[data-app-version]')).toHaveText(version)
+    await expect(page.locator('[data-update-state]')).toHaveAttribute(
+      'data-update-state',
+      'disabled',
+    )
+    await expect(page.getByRole('button', { name: 'Check for updates' })).toBeDisabled()
+    await page.keyboard.press('Control+1')
 
     expect(consoleErrors).toEqual([])
     await app.close()

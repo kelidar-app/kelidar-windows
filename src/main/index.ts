@@ -11,6 +11,7 @@ import {
   powerMonitor,
 } from 'electron'
 import { readdir, readFile, stat } from 'node:fs/promises'
+import { autoUpdater } from 'electron-updater'
 import { APP, APP_ORIGIN } from '@shared/app'
 import { OS_RELEASE_COMMAND } from '@shared/host-extras'
 import { pickDefaultLanguage, type Theme } from '@shared/settings'
@@ -27,6 +28,8 @@ import { registerHostHandlers } from './ipc/host-handlers'
 import { registerKeychainHandlers } from './ipc/keychain-handlers'
 import { registerImportHandlers } from './ipc/import-handlers'
 import { registerSecurityHandlers } from './ipc/security-handlers'
+import { registerUpdateHandlers } from './ipc/update-handlers'
+import { UpdateService } from './updates/update-service'
 import { registerSessionHandlers } from './ipc/session-handlers'
 import { createSinkRegistry } from './ipc/web-contents-sink'
 import { createIpcRouter } from './ipc/router'
@@ -352,6 +355,25 @@ async function start(): Promise<void> {
       },
     }),
   })
+
+  // Only the installed app updates itself: a development build has nothing to replace.
+  autoUpdater.logger = null
+  const updates = new UpdateService({
+    updater: app.isPackaged ? autoUpdater : null,
+    currentVersion: app.getVersion(),
+    emit: (status) => {
+      for (const win of BrowserWindow.getAllWindows()) {
+        if (!win.isDestroyed()) win.webContents.send('update:status', status)
+      }
+    },
+  })
+  registerUpdateHandlers(router, { updates })
+  if (settings.getUi().checkUpdates) {
+    // A little after start, so the first window is not slowed down.
+    setTimeout(() => {
+      void updates.check()
+    }, 10_000).unref()
+  }
 
   registerSessionHandlers(router, {
     sessions,

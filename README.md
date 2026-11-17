@@ -15,26 +15,65 @@ Connect to a server in two steps. Everything else stays out of the way until you
 </div>
 
 > [!WARNING]
-> Kelidar is an early preview (phase 1 of 7 on the [roadmap](docs/ROADMAP.md)). It works, but
-> features are missing and data formats may still change. The first public alpha comes after phase 2.
+> Kelidar is in alpha (phase 2 of 7 on the [roadmap](docs/ROADMAP.md)). Day-to-day SSH work is
+> covered, file transfer and tunnels come next. Export a backup file now and then (Settings →
+> Security) while the app is young.
+
+![Hosts, grouped, with favorites, recent hosts and system badges](docs/screenshots/hosts.png)
 
 ## Why Kelidar
 
 - **Local-first.** No account, no cloud, no telemetry. Your hosts and secrets stay on your PC.
 - **Simple by default.** The host form has four fields: name, address, user name and sign-in method. The rest sits under "More options".
 - **Secure by design.** Passwords and keys live in an encrypted vault and never reach the user interface.
+- **Keyboard first.** Every action is in the command palette (Ctrl+K) and has a shortcut.
 - **English and Persian**, with a full right-to-left layout.
 
-## Features in this preview
+## Features
 
-- Saved hosts with password, password-asked-each-time, or private key sign-in (OpenSSH, PEM and PuTTY keys)
+**Hosts**
+
+- Groups and subgroups that pass down a port, environment, identity and jump host; tags,
+  favorites, recent hosts, card and list views, and search by name, address, user, group, tag or notes
+- Move hosts and groups by drag and drop
+- Notes and links per host, and a badge with the server's system after the first connection
+- Import from `~/.ssh/config` and saved PuTTY sessions (offered on first run), and Smart Paste:
+  paste a hosting provider's e-mail and check the filled-in form before saving
+
+**Sign-in**
+
+- Passwords, private keys (OpenSSH, PEM, PuTTY), the Windows OpenSSH agent and Pageant
+- A Keychain of keys and shared identities; generate Ed25519 or RSA keys
+- "Upgrade to key login": shows the exact command, installs the key, tests it, then switches the host
+- Two-factor codes when the server asks
+
+**Connections and terminal**
+
 - Quick Connect: type `user@host` or paste a whole `ssh` command
+- Jump hosts, SOCKS5 and HTTP proxies, agent forwarding, a startup command
+- Automatic reconnect, and sticky sessions (tmux) that pick up where you left off
+- Tabs and split panes (drag a tab into another), search, clickable links, zoom, a paste guard
+  for multi-line text, production hosts marked in red, and a hotkey that types the sudo password
 - Trust on first use with SHA-256 host key fingerprints; a changed key blocks the connection
-- Terminal tabs (xterm.js with WebGL), copy on select, paste with Ctrl+Shift+V or right click
-- Clear connection errors that tell you what to do next
-- Four terminal themes with light and dark variants that follow Windows
+
+**Security and data**
+
+- Optional master password, lock screen, and auto-lock after idle time or when Windows locks
+- Copied passwords leave the clipboard after 30 seconds
+- Encrypted export and import, and ten automatic backups you can restore
+- Updates from GitHub Releases, installed when you choose "Restart to update"
 
 The full list, with the phase each feature arrives in, is in [docs/FEATURES.md](docs/FEATURES.md).
+
+<table>
+  <tr>
+    <td><img src="docs/screenshots/command-palette.png" alt="The command palette"></td>
+    <td><img src="docs/screenshots/import.png" alt="Importing hosts from ssh config"></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/screenshots/hosts-persian.png" alt="The Persian, right-to-left layout in the dark theme"></td>
+  </tr>
+</table>
 
 ## Download
 
@@ -47,8 +86,16 @@ The installer is not code-signed yet, so Windows SmartScreen may warn you. Choos
 compare its hash with `SHA256SUMS.txt` from the same release:
 
 ```powershell
-Get-FileHash .\Kelidar-Setup-0.1.0-x64.exe -Algorithm SHA256
+Get-FileHash .\Kelidar-Setup-0.2.0-x64.exe -Algorithm SHA256
 ```
+
+### Updates
+
+Kelidar checks [Releases](https://github.com/kelidar-app/kelidar-windows/releases) when it starts
+(you can turn this off in Settings), downloads a new version in the background and shows
+**Restart to update** when it is ready. The check sends nothing but the request for the release
+list. Until the installer is code-signed, a downloaded update is checked against the SHA-512 hash
+published with the same release.
 
 ## Build from source
 
@@ -62,14 +109,15 @@ npm ci
 npm run dev
 ```
 
-| Command             | What it does                                          |
-| ------------------- | ----------------------------------------------------- |
-| `npm run dev`       | Start the app with hot reload                         |
-| `npm run typecheck` | Type-check main, preload, renderer and tests          |
-| `npm run lint`      | ESLint with no warnings allowed                       |
-| `npm test`          | Unit and integration tests (Vitest)                   |
-| `npm run test:e2e`  | Playwright smoke tests against Electron (build first) |
-| `npm run dist`      | Build the NSIS installer into `dist/`                 |
+| Command               | What it does                                          |
+| --------------------- | ----------------------------------------------------- |
+| `npm run dev`         | Start the app with hot reload                         |
+| `npm run typecheck`   | Type-check main, preload, renderer and tests          |
+| `npm run lint`        | ESLint with no warnings allowed                       |
+| `npm test`            | Unit and integration tests (Vitest)                   |
+| `npm run test:e2e`    | Playwright smoke tests against Electron (build first) |
+| `npm run dist`        | Build the NSIS installer into `dist/`                 |
+| `npm run screenshots` | Make the README screenshots (build first)             |
 
 ## Security
 
@@ -78,7 +126,9 @@ npm run dev
 - All privileged work happens in the main process behind one typed IPC contract; every message is
   validated with zod.
 - The vault is a single file encrypted with AES-256-GCM. Its key is protected by Windows DPAPI
-  through Electron `safeStorage`.
+  through Electron `safeStorage`, or, with a master password, by a key derived with scrypt.
+- A locked app shows nothing but the lock screen, and the passwords and keys of open
+  connections leave memory until you unlock.
 - Secrets never reach the renderer, the logs or error messages.
 
 The full design is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). To report a vulnerability,
