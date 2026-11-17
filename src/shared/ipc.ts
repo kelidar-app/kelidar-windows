@@ -1,7 +1,9 @@
 import { z } from 'zod'
 import type { IpcError } from './errors'
 import { groupSaveRequestSchema, groupViewSchema } from './groups'
+import type { HostOs } from './host-extras'
 import { hostSaveRequestSchema, hostViewSchema, keyFileInfoSchema } from './hosts'
+import { importApplyRequestSchema, importApplyResponseSchema, importScanSchema } from './importers'
 import {
   agentStatusSchema,
   identitySaveRequestSchema,
@@ -151,6 +153,16 @@ export const ipcContract = {
   'hosts:upgradeRun': {
     request: keyUpgradeRunSchema,
     response: hostViewSchema,
+  },
+  /** Reads ~/.ssh/config and PuTTY's saved sessions; a preview, never a key or password. */
+  'import:scan': {
+    request: noPayload,
+    response: importScanSchema,
+  },
+  /** Saves the chosen rows of a scan as hosts. */
+  'import:apply': {
+    request: importApplyRequestSchema,
+    response: importApplyResponseSchema,
   },
   'identities:list': {
     request: noPayload,
@@ -302,6 +314,8 @@ export interface IpcEventPayloads {
   'prompt:cancel': { promptId: string }
   /** The vault was locked, unlocked, restored or failed. */
   'vault:state': VaultStatus
+  /** A host's system was read after its first connection. */
+  'host:os': { hostId: string; os: HostOs }
 }
 export type IpcEventPayload<E extends IpcEvent> = IpcEventPayloads[E]
 

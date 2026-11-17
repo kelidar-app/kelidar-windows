@@ -1,8 +1,11 @@
 import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test'
+import path from 'node:path'
 import { APP } from '../../src/shared/app'
 
 /** Same name as USER_DATA_OVERRIDE_ENV in src/main/app-paths.ts (that module needs Electron). */
 export const USER_DATA_ENV = `${APP.name.toUpperCase()}_USER_DATA_DIR`
+/** Same as IMPORT_OVERRIDE_ENV: "Import hosts" reads this folder, never the real ~/.ssh or registry. */
+export const IMPORT_DIR_ENV = `${APP.name.toUpperCase()}_IMPORT_DIR`
 
 export interface Launched {
   app: ElectronApplication
@@ -19,7 +22,14 @@ export function testEnv(userData: string): Record<string, string> {
     if (value !== undefined) env[key] = value
   }
   env[USER_DATA_ENV] = userData
+  // Empty unless a test puts an ssh config or PuTTY sessions there.
+  env[IMPORT_DIR_ENV] = importDirOf(userData)
   return env
+}
+
+/** The folder "Import hosts" reads in a test: <userData>/import-home. */
+export function importDirOf(userData: string): string {
+  return path.join(userData, 'import-home')
 }
 
 /**

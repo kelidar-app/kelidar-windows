@@ -9,6 +9,7 @@ export const IPC_EVENTS = [
   'prompt:request',
   'prompt:cancel',
   'vault:state',
+  'host:os',
 ] as const
 
 export type IpcEvent = (typeof IPC_EVENTS)[number]

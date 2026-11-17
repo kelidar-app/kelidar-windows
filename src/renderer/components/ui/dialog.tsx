@@ -81,12 +81,14 @@ export function Dialog({
           {children !== undefined && (
             // relative: visually hidden inputs (sr-only) are placed inside the
             // scrolling area, not against the dialog, so the dialog never scrolls too.
-            <div className={cn('relative min-h-0 overflow-y-auto', !hideTitle && 'px-5 pt-4')}>
+            // pb-1: Persian glyphs reach a pixel below their line; the padding
+            // holds them, so a short dialog shows no scroll bar.
+            <div className={cn('relative min-h-0 overflow-y-auto', !hideTitle && 'px-5 pt-4 pb-1')}>
               {children}
             </div>
           )}
           {footer !== undefined && (
-            <div className="flex flex-wrap justify-end gap-2 px-5 pt-5 pb-5">{footer}</div>
+            <div className="flex flex-wrap justify-end gap-2 px-5 pt-4 pb-5">{footer}</div>
           )}
         </div>
       )}

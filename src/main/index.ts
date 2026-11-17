@@ -10,16 +10,22 @@ import {
   nativeTheme,
   powerMonitor,
 } from 'electron'
+import { readdir, readFile, stat } from 'node:fs/promises'
 import { APP, APP_ORIGIN } from '@shared/app'
+import { OS_RELEASE_COMMAND } from '@shared/host-extras'
 import { pickDefaultLanguage, type Theme } from '@shared/settings'
-import { configureAppPaths } from './app-paths'
+import { configureAppPaths, importOverrideDir } from './app-paths'
 import { GroupService } from './hosts/group-service'
 import { HostService } from './hosts/host-service'
 import { KeyUpgrades } from './hosts/key-upgrade'
-import { KeyFileImports } from './hosts/key-files'
+import { KeyFileImports, MAX_KEY_FILE_BYTES } from './hosts/key-files'
+import { parseOsRelease } from './hosts/os-release'
+import { HostImports } from './importers/import-service'
+import { expandIncludes } from './importers/ssh-config'
 import { registerIpcHandlers } from './ipc/handlers'
 import { registerHostHandlers } from './ipc/host-handlers'
 import { registerKeychainHandlers } from './ipc/keychain-handlers'
+import { registerImportHandlers } from './ipc/import-handlers'
 import { registerSecurityHandlers } from './ipc/security-handlers'
 import { registerSessionHandlers } from './ipc/session-handlers'
 import { createSinkRegistry } from './ipc/web-contents-sink'
@@ -29,6 +35,7 @@ import { Agents } from './keychain/agents'
 import { IdentityService } from './keychain/identity-service'
 import { KeyService } from './keychain/key-service'
 import { countAgentKeys, openSshAgent, PageantAgent, pagentExePath } from './platform/agent'
+import { readPuttySessions } from './platform/putty-registry'
 import { applyWindowsAppIdentity } from './platform/windows'
 import { AutoLock } from './security/auto-lock'
 import { SecretClipboard } from './security/secret-clipboard'
@@ -147,6 +154,25 @@ async function start(): Promise<void> {
       hosts.markConnected(hostId).catch((error: unknown) => {
         console.warn(`[hosts] could not record the connection: ${describeError(error)}`)
       })
+    },
+    // The host's badge: read once, only while the setting is on (it names the command).
+    osProbe: {
+      command: OS_RELEASE_COMMAND,
+      wanted: async (hostId) => settings.getUi().detectOs && (await hosts.needsOs(hostId)),
+      onResult: (hostId, output) => {
+        const os = parseOsRelease(output)
+        if (os === undefined) return
+        hosts
+          .setOs(hostId, os)
+          .then(() => {
+            for (const win of BrowserWindow.getAllWindows()) {
+              if (!win.isDestroyed()) win.webContents.send('host:os', { hostId, os })
+            }
+          })
+          .catch((error: unknown) => {
+            console.warn(`[hosts] could not record the system: ${describeError(error)}`)
+          })
+      },
     },
   })
   const upgrades = new KeyUpgrades({
@@ -299,6 +325,32 @@ async function start(): Promise<void> {
         : dialog.showOpenDialog(owner, options))
       return result.canceled ? null : (result.filePaths[0] ?? null)
     },
+  })
+
+  const importDir = importOverrideDir()
+  const home = importDir ?? os.homedir()
+  const configFiles = {
+    readFile: (filePath: string) => readFile(filePath, 'utf8'),
+    listDir: (dir: string) => readdir(dir).catch(() => []),
+  }
+  const sshContext = { home, localUser: os.userInfo().username }
+  registerImportHandlers(router, {
+    imports: new HostImports(vaults, {
+      ...sshContext,
+      readSshConfig: async () => {
+        const text = await readFile(path.join(home, '.ssh', 'config'), 'utf8').catch(() => null)
+        return text === null ? null : expandIncludes(text, configFiles, sshContext)
+      },
+      readPutty: () =>
+        importDir === undefined
+          ? readPuttySessions()
+          : readFile(path.join(importDir, 'putty.reg'), 'utf8').catch(() => null),
+      readKeyFile: async (filePath) => {
+        const info = await stat(filePath)
+        if (!info.isFile() || info.size > MAX_KEY_FILE_BYTES) throw new Error('not a key file')
+        return readFile(filePath, 'utf8')
+      },
+    }),
   })
 
   registerSessionHandlers(router, {

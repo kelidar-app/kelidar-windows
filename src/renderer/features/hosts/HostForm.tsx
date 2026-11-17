@@ -37,6 +37,8 @@ import {
   type ConnectionErrors,
 } from './connection-draft'
 import { GroupOptions } from './GroupForm'
+import { HostExtrasFields } from './HostExtrasFields'
+import { initialLinks, linksRequest } from './link-draft'
 import { canUpgradeToKey } from './host-keys'
 
 /** Sign-in choices besides a password, key or agent of the host's own. */
@@ -85,7 +87,7 @@ function HostForm({
     void loadKeychain()
   }, [loadKeychain])
 
-  const [name, setName] = useState(editing?.name ?? '')
+  const [name, setName] = useState(editing?.name ?? prefill?.name ?? '')
   const [address, setAddress] = useState(editing?.address ?? prefill?.address ?? '')
   const [username, setUsername] = useState(
     editing?.ownUsername ??
@@ -96,7 +98,13 @@ function HostForm({
   const sessionId = prefill?.sessionId
   const [useSessionSignIn, setUseSessionSignIn] = useState(sessionId !== undefined)
   const ownSignIn = editing?.identity === undefined ? editing?.signIn : undefined
-  const [draft, setDraft] = useState(() => initialDraft(ownSignIn))
+  const [draft, setDraft] = useState(() => {
+    const initial = initialDraft(ownSignIn)
+    return prefill?.password === undefined ? initial : { ...initial, password: prefill.password }
+  })
+  const [notes, setNotes] = useState(editing?.notes ?? '')
+  const [links, setLinks] = useState(() => initialLinks(editing?.links))
+  const [invalidLinks, setInvalidLinks] = useState<ReadonlySet<number>>(new Set())
   const [groupId, setGroupId] = useState(editing?.groupId ?? prefill?.groupId ?? '')
   const inherited = groupDefaultsFor(groupId === '' ? undefined : groupId, groups)
   const groupIdentity = identities.find((item) => item.id === inherited.identityId.value)
@@ -136,6 +144,8 @@ function HostForm({
       (editing?.tags.length ?? 0) > 0 ||
       editing?.color !== undefined ||
       editing?.agentForward === true ||
+      editing?.notes !== undefined ||
+      (editing?.links.length ?? 0) > 0 ||
       hasConnectionOptions(editing),
   )
   const [errors, setErrors] = useState<
@@ -205,12 +215,16 @@ function HostForm({
     const connectionResult = connectionRequest(connection, editing)
     setConnectionErrors(connectionResult.ok ? {} : connectionResult.errors)
     if (!connectionResult.ok) setShowMore(true)
+    const linksResult = linksRequest(links)
+    setInvalidLinks(linksResult.ok ? new Set() : linksResult.invalid)
+    if (!linksResult.ok) setShowMore(true)
     setErrors(next)
     if (
       Object.keys(next).length > 0 ||
       cleanAddress === null ||
       !parsedTags.success ||
-      !connectionResult.ok
+      !connectionResult.ok ||
+      !linksResult.ok
     ) {
       return
     }
@@ -229,6 +243,8 @@ function HostForm({
       ...(environment === '' ? {} : { environment }),
       ...(agentForward ? { agentForward: true } : {}),
       ...connectionResult.fields,
+      ...(notes.trim() === '' ? {} : { notes: notes.trim() }),
+      links: linksResult.links,
       ...(needsUsername ? { username: username.trim() } : {}),
       auth,
     })
@@ -549,6 +565,16 @@ function HostForm({
               </span>
             </span>
           </label>
+          <HostExtrasFields
+            notes={notes}
+            onNotes={setNotes}
+            links={links}
+            onLinks={(next) => {
+              setLinks(next)
+              setInvalidLinks(new Set())
+            }}
+            invalidLinks={invalidLinks}
+          />
         </div>
       </div>
 

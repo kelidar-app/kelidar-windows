@@ -23,6 +23,8 @@ export const IPC_CHANNELS = [
   'hosts:pickKeyFile',
   'hosts:upgradePrepare',
   'hosts:upgradeRun',
+  'import:scan',
+  'import:apply',
   'identities:list',
   'identities:save',
   'identities:delete',

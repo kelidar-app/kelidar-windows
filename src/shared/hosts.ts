@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { normalizeAddress } from './address'
+import { hostLinksSchema, hostOsSchema, notesSchema } from './host-extras'
 import { authRequestSchema, signInViewSchema } from './keychain'
 import {
   colorSchema,
@@ -65,6 +66,9 @@ export const hostViewSchema = z.object({
     .optional(),
   startupCommand: z.string().optional(),
   stickySession: z.boolean(),
+  notes: z.string().optional(),
+  links: hostLinksSchema,
+  os: hostOsSchema.optional(),
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
   lastConnectedAt: timestampSchema.optional(),
@@ -168,6 +172,10 @@ export const hostSaveRequestSchema = z.strictObject({
     .regex(/^[^\r\n]*$/)
     .optional(),
   stickySession: z.boolean().optional(),
+  /** Missing or '': no notes. */
+  notes: notesSchema.optional(),
+  /** Missing: no links. */
+  links: hostLinksSchema.optional(),
   username: usernameSchema.optional(),
   auth: z.discriminatedUnion('type', [
     ...authRequestSchema.options,

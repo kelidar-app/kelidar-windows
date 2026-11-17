@@ -21,7 +21,7 @@
   },
   "hosts": {
     "emptyTitle": "No hosts yet",
-    "emptyBody": "Add a server with New host, or connect right away with Quick Connect.",
+    "emptyBody": "Add a server with New host, connect right away with Quick Connect, or bring the hosts you already have.",
     "quickConnectLabel": "Quick Connect",
     "quickConnectPlaceholder": "user@server:22",
     "quickConnectButton": "Connect",
@@ -89,7 +89,11 @@
     "lineHeightInvalid": "Use a number from 1 to 2, like 1.2.",
     "zoomHint": "Zoom every terminal with {{zoomIn}} and {{zoomOut}}, or Ctrl and the mouse wheel. {{reset}} goes back to this size.",
     "pasteGuard": "Ask before pasting several lines",
-    "pasteGuardHint": "Shows what you paste before it runs. Production servers always ask."
+    "pasteGuardHint": "Shows what you paste before it runs. Production servers always ask.",
+    "hosts": "Hosts",
+    "detectOs": "Show each server's system after its first connection",
+    "detectOsHint": "Once per host, on its own channel, read-only. The command:",
+    "importHint": "Bring hosts from your {{path}} file and your saved PuTTY sessions."
   },
   "languages": {
     "en": "English",
@@ -160,7 +164,7 @@
     "IMPORT_FILE_INVALID": "This is not a {{appName}} backup file, or it is damaged. Choose a file made with \"Export a backup file\".",
     "IMPORT_FILE_NEWER": "This backup was made by a newer version of {{appName}}. Install the latest version, then import it again.",
     "IMPORT_PASSWORD_WRONG": "That password does not open this backup file. Type the password chosen when the file was exported.",
-    "IMPORT_EXPIRED": "The chosen file is no longer open. Choose the file again."
+    "IMPORT_EXPIRED": "This import was open too long and has been closed. Start it again."
   },
   "common": {
     "save": "Save",
@@ -242,7 +246,17 @@
     "startupHint": "Typed into the shell right after you sign in, like cd /var/www. Not typed again when a sticky session resumes.",
     "startupInvalid": "Use one line of at most 1000 characters.",
     "sticky": "Sticky session (tmux)",
-    "stickyHint": "Your shell runs inside tmux on the server, so after a dropped connection you continue right where you were. Kelidar checks for tmux and then runs:"
+    "stickyHint": "Your shell runs inside tmux on the server, so after a dropped connection you continue right where you were. Kelidar checks for tmux and then runs:",
+    "notes": "Notes",
+    "notesHint": "Anything worth remembering: what the server is for, who to call. Found by search.",
+    "links": "Links",
+    "linksHint": "Web pages for this server, such as its control panel. They open in your browser.",
+    "linkTitle": "Title of link {{number}}",
+    "linkTitlePlaceholder": "Control panel",
+    "linkUrl": "Address of link {{number}}",
+    "linkRemove": "Remove link {{number}}",
+    "linkInvalid": "Use a web address that starts with https:// or http://, without a user name or password in it.",
+    "linkAdd": "Add a link"
   },
   "prompts": {
     "hostKeyTitle": "Trust this server?",
@@ -434,7 +448,9 @@
     "masterPassword": "Set or change the master password",
     "exportData": "Export a backup file",
     "importData": "Import a backup file",
-    "restoreBackup": "Restore an automatic backup"
+    "restoreBackup": "Restore an automatic backup",
+    "importHosts": "Import hosts from ssh config and PuTTY",
+    "smartPaste": "Smart Paste: fill a host from pasted text"
   },
   "shortcuts": {
     "title": "Keyboard shortcuts",
@@ -635,5 +651,72 @@
     "restoreWarning": "Your data will be replaced by the copy from {{when}}. Your current data is kept as a backup first, so you can go back.",
     "restoreConfirm": "Replace my data",
     "restored": "Restored the copy from {{when}}."
+  },
+  "hostInfo": {
+    "title": "Notes and links: {{name}}",
+    "notes": "Notes",
+    "noNotes": "No notes.",
+    "links": "Links",
+    "noLinks": "No links.",
+    "open": "Notes and links",
+    "openFor": "Notes and links of {{name}}",
+    "openLink": "Open {{title}}"
+  },
+  "import": {
+    "button": "Import",
+    "emptyAction": "Import from ssh config or PuTTY",
+    "title": "Import hosts",
+    "body": "From {{path}} and your saved PuTTY sessions. Nothing is saved until you choose Import.",
+    "welcomeTitle": "Bring your servers with you",
+    "welcomeBody": "These are already on this computer. Review them and choose which to import.",
+    "notNow": "Not now",
+    "review": "Review and import",
+    "found": {
+      "sshConfig_one": "{{count}} host in your ssh config file",
+      "sshConfig_other": "{{count}} hosts in your ssh config file",
+      "putty_one": "{{count}} saved PuTTY session",
+      "putty_other": "{{count}} saved PuTTY sessions"
+    },
+    "sources": {
+      "sshConfig": "ssh config",
+      "putty": "PuTTY"
+    },
+    "selectAll": "Select all",
+    "selectNone": "Select none",
+    "signInKey": "Key {{name}}",
+    "signInAgent": "Agent (Pageant or OpenSSH)",
+    "signInAsk": "Asks for the password",
+    "via": "through {{name}}",
+    "proxy": "proxy {{host}}",
+    "duplicate": "Already saved as {{name}}.",
+    "warnings": {
+      "keyEncrypted": "The key file needs its passphrase, so this host signs in with the keys in Pageant or the OpenSSH agent. To save the key itself, import it in Keychain.",
+      "keyUnreadable": "The key file could not be read; the host asks for a password. Choose a key in the host form after importing.",
+      "noUsername": "PuTTY saved no user name, so your Windows user name is used. Edit the host if it is different.",
+      "jumpNotFound": "Its jump host is not among these or your saved hosts, so it connects directly. Add the jump host, then pick it in the host form.",
+      "jumpChain": "It goes through several jump hosts; only the last one is kept. Set the others on that jump host.",
+      "proxyCommand": "It uses a proxy command, which is not supported, so it connects directly.",
+      "proxyUnsupported": "It uses a SOCKS4 or Telnet proxy, which is not supported, so it connects directly."
+    },
+    "apply_one": "Import {{count}} host",
+    "apply_other": "Import {{count}} hosts",
+    "nothing": "Nothing to import: no hosts in {{path}} and no saved PuTTY sessions were found.",
+    "done_one": "Imported {{count}} host.",
+    "done_other": "Imported {{count}} hosts.",
+    "doneWithKeys_one": "Imported {{count}} host. Keys added to Keychain: {{keys}}.",
+    "doneWithKeys_other": "Imported {{count}} hosts. Keys added to Keychain: {{keys}}."
+  },
+  "smartPaste": {
+    "button": "Smart Paste",
+    "title": "Smart Paste",
+    "body": "Paste a provider's e-mail or any text with the server's details. You check everything in the host form before saving.",
+    "text": "Text",
+    "placeholder": "IP: 203.0.113.7\nPort: 22\nUser: root\nPassword: …",
+    "found": "Found",
+    "notFound": "Not found",
+    "show": "Show password",
+    "hide": "Hide password",
+    "fill": "Fill the host form",
+    "noAddress": "No server address found. Check that the text has the server's IP or host name."
   }
 }

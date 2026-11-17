@@ -295,13 +295,13 @@ describe('GroupService and HostService together', () => {
 })
 
 describe('vault data migration', () => {
-  it('turns version 1 data into version 3 with empty group and identity lists', () => {
+  it('turns version 1 data into the current version with empty group and identity lists', () => {
     const v1 = { version: 1, hosts: [], secrets: [], keys: [], knownHosts: [] }
     expect(migrateVaultData(v1)).toEqual({
       status: 'ok',
-      data: { ...v1, version: 3, groups: [], identities: [] },
+      data: { ...v1, version: 4, groups: [], identities: [] },
     })
-    expect(migrateVaultData({ version: 4 })).toEqual({ status: 'future' })
+    expect(migrateVaultData({ version: 5 })).toEqual({ status: 'future' })
     expect(migrateVaultData({ version: 'x' })).toEqual({ status: 'invalid' })
     expect(migrateVaultData([])).toEqual({ status: 'invalid' })
   })
@@ -357,7 +357,7 @@ describe('vault data migration', () => {
 
       const vault = await Vault.open({ directory: dir, wrapper })
       expect(vault.read()).toMatchObject({
-        version: 3,
+        version: 4,
         groups: [],
         identities: [],
         hosts: [{ name: 'old' }],

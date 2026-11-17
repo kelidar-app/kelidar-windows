@@ -26,6 +26,7 @@ function host(fields: Partial<HostView> & { name: string }): HostView {
     agentForward: false,
     ownJump: { type: 'inherit' },
     stickySession: false,
+    links: [],
     signIn: { method: 'ask' },
     createdAt: NOW,
     updatedAt: NOW,

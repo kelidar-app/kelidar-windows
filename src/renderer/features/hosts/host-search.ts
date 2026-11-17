@@ -34,6 +34,7 @@ export function searchHosts(
       [host.username, 0.6],
       [path, 0.6],
       ...host.tags.map((tag) => [tag, 0.7] as const),
+      [host.notes ?? '', 0.3],
     ] as const
     let score = tagTerms.length * 50
     let matched = true

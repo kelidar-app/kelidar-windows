@@ -4,12 +4,15 @@ import { HostFormDialog } from '@renderer/features/hosts/HostForm'
 import { HostsView } from '@renderer/features/hosts/HostsView'
 import { KeychainDialogs } from '@renderer/features/keychain/KeychainDialogs'
 import { KeychainView } from '@renderer/features/keychain/KeychainView'
+import { useFirstRunImport } from '@renderer/features/import/first-run'
+import { ImportDialogs } from '@renderer/features/import/ImportDialogs'
 import { LockScreen } from '@renderer/features/security/LockScreen'
 import { SecurityDialogs } from '@renderer/features/security/SecurityDialogs'
 import { PromptDialogs } from '@renderer/features/sessions/PromptDialogs'
 import { SettingsView } from '@renderer/features/settings/SettingsView'
 import { Workspace } from '@renderer/features/terminal/Workspace'
 import { PasteGuardDialog } from '@renderer/features/terminal/PasteGuardDialog'
+import { subscribeToHostOs } from '@renderer/stores/hosts'
 import { subscribeToPrompts } from '@renderer/stores/prompts'
 import { subscribeToVault, useVaultStore } from '@renderer/stores/security'
 import { HOME_TAB, startTabs, useTabsStore } from '@renderer/stores/tabs'
@@ -33,11 +36,14 @@ export function App() {
     startTabs()
     const stopPrompts = subscribeToPrompts()
     const stopVault = subscribeToVault()
+    const stopHostOs = subscribeToHostOs()
     return () => {
       stopPrompts()
       stopVault()
+      stopHostOs()
     }
   }, [])
+  useFirstRunImport()
 
   const homeActive = activeId === HOME_TAB
   return (
@@ -86,6 +92,7 @@ function AppShell({
           <GroupFormDialog />
           <KeychainDialogs />
           <SecurityDialogs />
+          <ImportDialogs />
           <PromptDialogs />
           <PasteGuardDialog />
           <CommandPalette />

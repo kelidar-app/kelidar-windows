@@ -6,6 +6,18 @@ import { APP } from '@shared/app'
 export const USER_DATA_OVERRIDE_ENV = `${APP.name.toUpperCase()}_USER_DATA_DIR`
 
 /**
+ * Development and tests only: "Import hosts" reads <dir>/.ssh/config and
+ * <dir>/putty.reg instead of the real home folder and registry. Ignored in a
+ * packaged build.
+ */
+export const IMPORT_OVERRIDE_ENV = `${APP.name.toUpperCase()}_IMPORT_DIR`
+
+export function importOverrideDir(): string | undefined {
+  const dir = app.isPackaged ? undefined : process.env[IMPORT_OVERRIDE_ENV]
+  return dir !== undefined && path.isAbsolute(dir) ? dir : undefined
+}
+
+/**
  * Must run before anything reads userData, including the single-instance lock.
  * userData is %APPDATA%\<product name>.
  */

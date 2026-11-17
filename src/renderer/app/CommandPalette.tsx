@@ -23,7 +23,9 @@ import { scoreKeywords } from '@renderer/lib/fuzzy'
 import { canUpgradeToKey, HOST_KEYS } from '@renderer/features/hosts/host-keys'
 import { useGroupFormStore, useHostFormStore, useHostsStore } from '@renderer/stores/hosts'
 import { useKeychainDialogStore } from '@renderer/stores/keychain'
+import { useImportStore } from '@renderer/stores/import'
 import { copySavedPassword } from '@renderer/stores/security'
+import { api } from '@renderer/lib/api'
 import { useSettingsStore } from '@renderer/stores/settings'
 import { tabTitle, useTabsStore } from '@renderer/stores/tabs'
 import { useUiStore } from '@renderer/stores/ui'
@@ -388,6 +390,20 @@ function HostPage({ host, run }: { host: HostView; run: (action: () => void) => 
       },
     },
     ...upgrade,
+    {
+      id: 'info',
+      label: t('hostInfo.open'),
+      shortcut: HOST_KEYS.info,
+      action: () => {
+        useImportStore.getState().open({ kind: 'hostInfo', host })
+      },
+    },
+    ...host.links.map((link, index) => ({
+      id: `link-${String(index)}`,
+      label: t('hostInfo.openLink', { title: link.title ?? link.url }),
+      shortcut: '',
+      action: () => void api.invoke('app:openExternal', { url: link.url }),
+    })),
     ...(host.signIn.method === 'password'
       ? [
           {

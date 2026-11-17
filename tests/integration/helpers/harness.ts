@@ -18,7 +18,11 @@ import { KnownHosts } from '../../../src/main/ssh/host-keys'
 import { PromptBroker } from '../../../src/main/ssh/prompts'
 import { quickConnectTarget } from '../../../src/main/ssh/quick-target'
 import { SessionManager, type SessionTiming } from '../../../src/main/ssh/session-manager'
+import { parseOsRelease } from '../../../src/main/hosts/os-release'
+import { HostImports, type ImportSourcesDeps } from '../../../src/main/importers/import-service'
+import { registerImportHandlers } from '../../../src/main/ipc/import-handlers'
 import { registerSecurityHandlers } from '../../../src/main/ipc/security-handlers'
+import { OS_RELEASE_COMMAND } from '../../../src/shared/host-extras'
 import { registerSessionHandlers } from '../../../src/main/ipc/session-handlers'
 import { SecretClipboard } from '../../../src/main/security/secret-clipboard'
 import { DataTransfer } from '../../../src/main/vault/data-transfer'
@@ -108,6 +112,10 @@ export async function createHarness(
     agentPipe?: string
     /** The vault folder; a new temp folder by default (removed on close). */
     vaultDir?: string
+    /** Read /etc/os-release after a host's first connection (as the app does by default). */
+    osProbe?: boolean
+    /** What "Import hosts" finds; nothing by default. */
+    importSources?: Partial<ImportSourcesDeps>
   } = {},
 ) {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'kelidar-it-'))
@@ -147,6 +155,22 @@ export async function createHarness(
     onConnected: (hostId) => {
       void hosts.markConnected(hostId)
     },
+    ...(options.osProbe === true
+      ? {
+          osProbe: {
+            command: OS_RELEASE_COMMAND,
+            wanted: (hostId: string) => hosts.needsOs(hostId),
+            onResult: (hostId: string, output: string) => {
+              const os = parseOsRelease(output)
+              if (os !== undefined) {
+                void hosts.setOs(hostId, os).then(() => {
+                  sink.send('host:os', { hostId, os })
+                })
+              }
+            },
+          },
+        }
+      : {}),
     ...(options.timing === undefined ? {} : { timing: options.timing }),
   })
 
@@ -222,6 +246,17 @@ export async function createHarness(
   })
 
   const sink = new FakeSink(1)
+  registerImportHandlers(router, {
+    imports: new HostImports(vaults, {
+      home: dir,
+      localUser: 'windows-user',
+      readSshConfig: () => Promise.resolve(null),
+      readPutty: () => Promise.resolve(null),
+      readKeyFile: () => Promise.reject(new Error('no key files')),
+      ...options.importSources,
+    }),
+  })
+
   // As in src/main/index.ts: locking drops secrets and tells the window.
   vaults.onChange((status) => {
     if (status.state === 'locked') {

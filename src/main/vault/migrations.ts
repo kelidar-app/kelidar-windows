@@ -4,7 +4,7 @@
  * rewritten in the new shape on the next save (after the usual backup of the
  * old file).
  */
-export const CURRENT_DATA_VERSION = 3
+export const CURRENT_DATA_VERSION = 4
 
 type Data = Record<string, unknown>
 
@@ -13,10 +13,15 @@ interface DataMigration {
   migrate: (data: Data) => Data
 }
 
-/** Version 2 (Phase 2) added groups, version 3 identities. */
+/**
+ * Version 2 (Phase 2) added groups, version 3 identities, version 4 host
+ * notes, links and system. Version 4 only adds optional fields, but the bump
+ * stops an older app from opening the vault and dropping them on save.
+ */
 const MIGRATIONS: readonly DataMigration[] = [
   { from: 1, migrate: (v1) => ({ ...v1, version: 2, groups: [] }) },
   { from: 2, migrate: (v2) => ({ ...v2, version: 3, identities: [] }) },
+  { from: 3, migrate: (v3) => ({ ...v3, version: 4 }) },
 ]
 
 export type DataMigrationResult =

@@ -4,8 +4,8 @@ import {
   LockKeyhole,
   MessageSquareMore,
   Pencil,
+  NotebookText,
   Play,
-  Server,
   Star,
   Trash2,
   Usb,
@@ -20,12 +20,14 @@ import { Button } from '@renderer/components/ui/button'
 import { cn } from '@renderer/lib/cn'
 import { useGroupFormStore, useHostFormStore, useHostsStore } from '@renderer/stores/hosts'
 import { useKeychainDialogStore } from '@renderer/stores/keychain'
+import { useImportStore } from '@renderer/stores/import'
 import { copySavedPassword } from '@renderer/stores/security'
 import { useTabsStore } from '@renderer/stores/tabs'
 import { useUiStore } from '@renderer/stores/ui'
 import { COLOR_EDGE, ENVIRONMENT_BADGE } from './colors'
 import { DRAG_TYPE, hostDragItem, useDragStore } from './drag'
 import { canUpgradeToKey, HOST_KEYS } from './host-keys'
+import { OsBadge } from './OsBadge'
 
 export type HostLayout = 'cards' | 'list'
 
@@ -144,6 +146,9 @@ export function HostItem({ host, layout }: { host: HostView; layout: HostLayout 
     } else if (code === 'KeyD' && event.ctrlKey) {
       event.preventDefault()
       toggleFavorite()
+    } else if (code === 'KeyI' && event.ctrlKey && !event.shiftKey) {
+      event.preventDefault()
+      useImportStore.getState().open({ kind: 'hostInfo', host })
     } else if (code === 'KeyU' && event.ctrlKey && canUpgradeToKey(host)) {
       event.preventDefault()
       openKeychainDialog({ kind: 'upgrade', host })
@@ -164,8 +169,25 @@ export function HostItem({ host, layout }: { host: HostView; layout: HostLayout 
     ? t('hosts.unfavorite', { name: host.name })
     : t('hosts.favorite', { name: host.name })
 
+  const hasInfo = host.notes !== undefined || host.links.length > 0
   const actions = (
     <>
+      {hasInfo && (
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={t('hostInfo.openFor', { name: host.name })}
+          title={t('nav.withShortcut', {
+            label: t('hostInfo.open'),
+            shortcut: HOST_KEYS.info,
+          })}
+          onClick={() => {
+            useImportStore.getState().open({ kind: 'hostInfo', host })
+          }}
+        >
+          <NotebookText aria-hidden />
+        </Button>
+      )}
       {host.signIn.method === 'password' && (
         <Button
           variant="ghost"
@@ -243,7 +265,7 @@ export function HostItem({ host, layout }: { host: HostView; layout: HostLayout 
     },
     tabIndex: 0,
     'aria-label': t('hosts.rowLabel', { name: host.name, target }),
-    'aria-keyshortcuts': 'Enter Control+E Control+D Delete Control+Shift+A',
+    'aria-keyshortcuts': 'Enter Control+E Control+D Control+I Delete Control+Shift+A',
     'data-host-id': host.id,
     'data-host-item': '',
     onKeyDown,
@@ -260,7 +282,7 @@ export function HostItem({ host, layout }: { host: HostView; layout: HostLayout 
           edge,
         )}
       >
-        <Server aria-hidden className="size-4 shrink-0 text-primary" />
+        <OsBadge os={host.os} className="size-5 text-[0.625rem]" />
         <span className="min-w-0 shrink truncate text-sm font-medium">{host.name}</span>
         <span
           dir="ltr"
@@ -293,9 +315,7 @@ export function HostItem({ host, layout }: { host: HostView; layout: HostLayout 
       )}
     >
       <div className="flex items-start gap-2">
-        <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-accent text-accent-foreground">
-          <Server aria-hidden className="size-4" />
-        </div>
+        <OsBadge os={host.os} />
         <div className="flex min-w-0 flex-1 flex-col">
           <span className="truncate text-sm font-medium">{host.name}</span>
           <span dir="ltr" className="truncate text-start font-mono text-xs text-muted-foreground">

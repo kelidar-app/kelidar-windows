@@ -94,6 +94,7 @@ export function ShortcutsDialog() {
             <Row label={t('shortcuts.favorite')} keys={[HOST_KEYS.favorite]} />
             <Row label={t('common.delete')} keys={[HOST_KEYS.remove]} />
             <Row label={t('upgrade.open')} keys={[HOST_KEYS.upgrade]} />
+            <Row label={t('hostInfo.open')} keys={[HOST_KEYS.info]} />
             <Row label={t('security.copyPassword')} keys={[HOST_KEYS.copyPassword]} />
             <Row label={t('shortcuts.moveFocus')} keys={[HOST_KEYS.move]} />
             <li className="py-1.5 text-xs text-muted-foreground">{t('shortcuts.dragTip')}</li>

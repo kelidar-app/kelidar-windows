@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { parseQuickConnect, type QuickConnectError } from '@shared/quick-connect'
 import { Button } from '@renderer/components/ui/button'
 import { Input } from '@renderer/components/ui/input'
+import { useImportStore } from '@renderer/stores/import'
 import { useTabsStore } from '@renderer/stores/tabs'
 import { useUiStore } from '@renderer/stores/ui'
 
@@ -69,6 +70,13 @@ export function QuickConnect() {
           onChange={(event) => {
             setValue(event.target.value)
             setError(null)
+          }}
+          onPaste={(event) => {
+            // Several lines (a provider's e-mail): Smart Paste reads them instead.
+            const text = event.clipboardData.getData('text')
+            if (!text.trim().includes('\n')) return
+            event.preventDefault()
+            useImportStore.getState().open({ kind: 'smartPaste', text })
           }}
         />
         <Button type="submit" disabled={busy}>

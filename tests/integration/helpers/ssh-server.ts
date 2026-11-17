@@ -37,6 +37,8 @@ export interface TestServerOptions {
   noForwarding?: boolean
   /** Hold back the answer to the tmux check this long (to close a tab while it waits). */
   probeDelayMs?: number
+  /** What `cat /etc/os-release` prints (the command fails when omitted). */
+  osRelease?: string
 }
 
 export interface TestServer {
@@ -281,6 +283,12 @@ export async function startTestServer(options: TestServerOptions = {}): Promise<
             tmuxSessions.add(tmux[1])
             state.tmuxAttaches.push(tmux[1])
             runShell(stream)
+            return
+          }
+          if (info.command === 'cat /etc/os-release') {
+            if (options.osRelease !== undefined) stream.write(options.osRelease)
+            stream.exit(options.osRelease === undefined ? 1 : 0)
+            stream.end()
             return
           }
           // "Install" a key the way the real command would.

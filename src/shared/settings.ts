@@ -3,7 +3,7 @@ import { agentSourceSchema } from './keychain'
 import { AUTO_LOCK_MINUTES, CLIPBOARD_CLEAR_SECONDS } from './security'
 
 /** Bump this and add a migration in src/main/settings/migrations.ts when the shape changes. */
-export const SETTINGS_VERSION = 6
+export const SETTINGS_VERSION = 7
 
 export const LANGUAGES = ['en', 'fa'] as const
 export const languageSchema = z.enum(LANGUAGES)
@@ -69,6 +69,10 @@ export const settingsFileSchema = z.object({
   /** Lock when Windows locks or the computer goes to sleep. */
   lockOnWindowsLock: z.boolean(),
   clipboardClearSeconds: clipboardClearSecondsSchema,
+  /** Read /etc/os-release after a host's first connection, for its badge. */
+  detectOs: z.boolean(),
+  /** The first-run import offer was shown (or there was nothing to import). */
+  importOffered: z.boolean(),
   window: windowStateSchema.optional(),
 })
 export type SettingsFile = z.infer<typeof settingsFileSchema>
@@ -87,6 +91,8 @@ export const uiSettingsSchema = z.object({
   autoLockMinutes: autoLockMinutesSchema,
   lockOnWindowsLock: z.boolean(),
   clipboardClearSeconds: clipboardClearSecondsSchema,
+  detectOs: z.boolean(),
+  importOffered: z.boolean(),
 })
 export type UiSettings = z.infer<typeof uiSettingsSchema>
 
@@ -104,6 +110,8 @@ export const uiSettingsPatchSchema = z
     autoLockMinutes: autoLockMinutesSchema.optional(),
     lockOnWindowsLock: z.boolean().optional(),
     clipboardClearSeconds: clipboardClearSecondsSchema.optional(),
+    detectOs: z.boolean().optional(),
+    importOffered: z.boolean().optional(),
   })
   .refine((patch) => Object.keys(patch).length > 0, { message: 'Empty patch' })
 export type UiSettingsPatch = z.infer<typeof uiSettingsPatchSchema>
@@ -121,6 +129,8 @@ export const DEFAULT_UI_SETTINGS: UiSettings = {
   autoLockMinutes: 15,
   lockOnWindowsLock: true,
   clipboardClearSeconds: 30,
+  detectOs: true,
+  importOffered: false,
 }
 
 /** Persian when the system prefers it, otherwise English. */

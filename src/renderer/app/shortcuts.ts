@@ -29,6 +29,8 @@ export const SHORTCUTS = {
   paste: shortcutOf('paste'),
   newHost: shortcutOf('newHost'),
   newGroup: shortcutOf('newGroup'),
+  importHosts: shortcutOf('importHosts'),
+  smartPaste: shortcutOf('smartPaste'),
   palette: shortcutOf('palette'),
   searchHosts: shortcutOf('searchHosts'),
   toggleHostsView: shortcutOf('toggleHostsView'),

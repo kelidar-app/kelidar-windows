@@ -10,7 +10,7 @@ import {
   SETTINGS_VERSION,
 } from '../../src/shared/settings'
 
-/** The terminal settings (version 5) and the lock and clipboard settings (version 6). */
+/** Settings added after version 4: terminal (5), lock and clipboard (6), system detection and import offer (7). */
 const TERMINAL = {
   terminalFontFamily: DEFAULT_UI_SETTINGS.terminalFontFamily,
   terminalFontSize: DEFAULT_UI_SETTINGS.terminalFontSize,
@@ -19,6 +19,8 @@ const TERMINAL = {
   autoLockMinutes: 15 as const,
   lockOnWindowsLock: true,
   clipboardClearSeconds: 30 as const,
+  detectOs: true,
+  importOffered: false,
 }
 
 describe('migrateSettings', () => {

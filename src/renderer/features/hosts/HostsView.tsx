@@ -1,5 +1,7 @@
 import {
   ChevronDown,
+  ClipboardPaste,
+  Download,
   FolderPlus,
   LayoutGrid,
   List,
@@ -21,6 +23,7 @@ import { Dialog } from '@renderer/components/ui/dialog'
 import { Input } from '@renderer/components/ui/input'
 import { cn } from '@renderer/lib/cn'
 import { useGroupFormStore, useHostFormStore, useHostsStore } from '@renderer/stores/hosts'
+import { useImportStore } from '@renderer/stores/import'
 import { useSecurityDialogStore } from '@renderer/stores/security'
 import { useSettingsStore } from '@renderer/stores/settings'
 import { useTabsStore } from '@renderer/stores/tabs'
@@ -63,7 +66,35 @@ export function HostsView() {
       <div className="flex flex-col gap-4 border-b border-border px-6 py-4">
         <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
           <h1 className="text-xl font-semibold">{t('hosts.title')}</h1>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              title={t('nav.withShortcut', {
+                label: t('commands.smartPaste'),
+                shortcut: SHORTCUTS.smartPaste.label,
+              })}
+              aria-keyshortcuts={SHORTCUTS.smartPaste.aria}
+              onClick={() => {
+                useImportStore.getState().open({ kind: 'smartPaste' })
+              }}
+            >
+              <ClipboardPaste aria-hidden />
+              {t('smartPaste.button')}
+            </Button>
+            <Button
+              variant="outline"
+              title={t('nav.withShortcut', {
+                label: t('commands.importHosts'),
+                shortcut: SHORTCUTS.importHosts.label,
+              })}
+              aria-keyshortcuts={SHORTCUTS.importHosts.aria}
+              onClick={() => {
+                useImportStore.getState().open({ kind: 'preview' })
+              }}
+            >
+              <Download aria-hidden />
+              {t('import.button')}
+            </Button>
             <Button
               variant="outline"
               title={t('nav.withShortcut', {
@@ -592,6 +623,26 @@ function EmptyState() {
       <div className="flex max-w-md flex-col gap-2">
         <h2 className="text-lg font-semibold">{t('hosts.emptyTitle')}</h2>
         <p className="text-sm text-muted-foreground">{t('hosts.emptyBody')}</p>
+      </div>
+      <div className="flex flex-wrap justify-center gap-2">
+        <Button
+          variant="outline"
+          onClick={() => {
+            useImportStore.getState().open({ kind: 'preview' })
+          }}
+        >
+          <Download aria-hidden />
+          {t('import.emptyAction')}
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => {
+            useImportStore.getState().open({ kind: 'smartPaste' })
+          }}
+        >
+          <ClipboardPaste aria-hidden />
+          {t('smartPaste.button')}
+        </Button>
       </div>
     </div>
   )

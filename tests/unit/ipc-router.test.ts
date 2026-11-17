@@ -71,6 +71,8 @@ describe('IPC router', () => {
       autoLockMinutes: 15 as const,
       lockOnWindowsLock: true,
       clipboardClearSeconds: 30 as const,
+      detectOs: true,
+      importOffered: false,
     }))
     const versionHandler = vi.fn(() => ({ version: '1.2.3' }))
     router.handle('settings:update', handler)
@@ -105,6 +107,8 @@ describe('IPC router', () => {
       autoLockMinutes: 15 as const,
       lockOnWindowsLock: true,
       clipboardClearSeconds: 30 as const,
+      detectOs: true,
+      importOffered: false,
     }))
     router.handle('settings:update', handler)
     await call('settings:update', trusted, { theme: 'dark' })
@@ -127,6 +131,8 @@ describe('IPC router', () => {
         autoLockMinutes: 15 as const,
         lockOnWindowsLock: true,
         clipboardClearSeconds: 30 as const,
+        detectOs: true,
+        importOffered: false,
         window: { width: 1 },
       }
       return withExtra
@@ -146,6 +152,8 @@ describe('IPC router', () => {
         autoLockMinutes: 15 as const,
         lockOnWindowsLock: true,
         clipboardClearSeconds: 30 as const,
+        detectOs: true,
+        importOffered: false,
       },
     })
   })

@@ -74,8 +74,20 @@ export const useHostsStore = create<HostsState>()((set, get) => ({
   },
 }))
 
+/** Listens for a host's system, read by main after the first connection. */
+export function subscribeToHostOs(): () => void {
+  return api.on('host:os', ({ hostId, os }) => {
+    useHostsStore.setState((state) => ({
+      hosts: state.hosts.map((host) => (host.id === hostId ? { ...host, os } : host)),
+    }))
+  })
+}
+
 /** Which host form is open, if any. Prefill comes from Quick Connect's "Save host" or a group. */
 export interface HostPrefill {
+  /** Smart Paste fills these too; the user checks them in the form before saving. */
+  name?: string
+  password?: string
   address?: string
   port?: number
   username?: string

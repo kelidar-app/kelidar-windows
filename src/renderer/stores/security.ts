@@ -3,6 +3,7 @@ import type { ErrorCode } from '@shared/errors'
 import type { VaultStatus } from '@shared/security'
 import { api } from '@renderer/lib/api'
 import { useGroupFormStore, useHostFormStore, useHostsStore } from './hosts'
+import { useImportStore } from './import'
 import { useKeychainDialogStore, useKeychainStore } from './keychain'
 import { showNotice } from './notice'
 import { useUiStore } from './ui'
@@ -30,6 +31,7 @@ function forgetVaultData(): void {
   useGroupFormStore.getState().close()
   useKeychainDialogStore.getState().close()
   useSecurityDialogStore.getState().close()
+  useImportStore.getState().close()
   useUiStore.getState().setPaletteOpen(false)
   useUiStore.getState().setShortcutsOpen(false)
 }

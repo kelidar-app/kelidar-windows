@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { ChoiceGroup, type Choice } from '@renderer/components/ui/choice-group'
 import { useSettingsStore } from '@renderer/stores/settings'
 import { SecuritySettings } from '@renderer/features/security/SecuritySettings'
+import { HostSettings } from './HostSettings'
 import { TerminalSettings } from './TerminalSettings'
 import { TerminalThemePicker } from './TerminalThemePicker'
 import type { Language, Theme } from '@shared/settings'
@@ -57,6 +58,7 @@ export function SettingsView() {
         />
       </div>
       <TerminalSettings />
+      <HostSettings />
       <SecuritySettings />
     </section>
   )

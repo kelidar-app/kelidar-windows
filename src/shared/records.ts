@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { hostLinksSchema, hostOsSchema, notesSchema } from './host-extras'
 
 /**
  * The stored data model (docs/ARCHITECTURE.md, "مدل داده"). Every record has
@@ -137,6 +138,12 @@ export const hostRecordSchema = baseRecordSchema.extend({
   /** Run the shell inside tmux, so work survives a dropped connection. */
   stickySession: z.boolean().optional(),
   lastConnectedAt: timestampSchema.optional(),
+  /** Free text: what the server is for, who to call… */
+  notes: notesSchema.optional(),
+  /** Related web pages, such as the admin panel. */
+  links: hostLinksSchema.optional(),
+  /** Read from /etc/os-release after the first connection. */
+  os: hostOsSchema.optional(),
 })
 
 /** A user name and sign-in shared by many hosts; changing it changes them all. */

@@ -82,6 +82,8 @@ export const DEFAULT_TIMING: SessionTiming = {
 }
 
 export const MAX_SESSIONS_PER_WINDOW = 64
+/** /etc/os-release is a few hundred bytes. */
+const OS_RELEASE_MAX_BYTES = 16 * 1024
 
 /** Failures worth another try: the network or the server is away, not a refusal. */
 const RETRYABLE: ReadonlySet<ErrorCode> = new Set<ErrorCode>([
@@ -109,6 +111,16 @@ export interface SessionManagerOptions {
   log?: (message: string) => void
   /** A session to a saved host reached a shell (for "Recent"). */
   onConnected?: (hostId: string) => void
+  /**
+   * After a saved host's connection is ready: whether to read its
+   * /etc/os-release (once, while the host has no system recorded), and what
+   * to do with the output. Without it nothing is run.
+   */
+  osProbe?: {
+    wanted: (hostId: string) => boolean | Promise<boolean>
+    command: string
+    onResult: (hostId: string, output: string) => void
+  }
   /** Agent sign-in and forwarding. Without it, agent sign-in fails with AGENT_UNAVAILABLE. */
   agents?: Pick<Agents, 'forSignIn' | 'forForwarding'>
   createClient?: () => Client
@@ -873,6 +885,43 @@ export class SessionManager {
       this.onLinkDropped(link, client)
     })
     for (const session of link.liveSessions()) this.openChannel(session, client)
+    this.probeOs(link, client)
+  }
+
+  /** Reads /etc/os-release over its own channel; the terminal never sees it. */
+  private probeOs(link: Link, client: Client): void {
+    const probe = this.options.osProbe
+    const hostId = link.target.hostId
+    if (probe === undefined || hostId === undefined || link.strict) return
+    void (async () => {
+      const wanted = await Promise.resolve(probe.wanted(hostId)).catch(() => false)
+      if (wanted && link.is('ready') && link.client === client)
+        this.runOsProbe(probe, hostId, client)
+    })()
+  }
+
+  private runOsProbe(
+    probe: NonNullable<SessionManagerOptions['osProbe']>,
+    hostId: string,
+    client: Client,
+  ): void {
+    try {
+      client.exec(probe.command, (error, stream) => {
+        if (error !== undefined) return
+        const chunks: Buffer[] = []
+        let bytes = 0
+        stream.on('data', (chunk: Buffer) => {
+          bytes += chunk.length
+          if (bytes <= OS_RELEASE_MAX_BYTES) chunks.push(chunk)
+        })
+        stream.stderr.resume()
+        stream.on('close', () => {
+          probe.onResult(hostId, Buffer.concat(chunks).toString('utf8'))
+        })
+      })
+    } catch {
+      // The connection went away meanwhile; the next connection tries again.
+    }
   }
 
   private onLinkFailed(link: Link, error: unknown): void {

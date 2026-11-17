@@ -2,6 +2,7 @@ import { FOCUS, paneIds } from '@renderer/features/terminal/layout'
 import { terminalActions } from '@renderer/features/terminal/terminal-registry'
 import { api } from '@renderer/lib/api'
 import { useGroupFormStore, useHostFormStore, useHostsStore } from '@renderer/stores/hosts'
+import { useImportStore } from '@renderer/stores/import'
 import { useKeychainDialogStore } from '@renderer/stores/keychain'
 import {
   copySavedPassword,
@@ -112,6 +113,14 @@ export const COMMANDS: readonly AppCommand[] = [
   command('newGroup', 'hosts', () => {
     useUiStore.getState().showSection('hosts')
     useGroupFormStore.getState().openNew()
+  }),
+  command('importHosts', 'hosts', () => {
+    useUiStore.getState().showSection('hosts')
+    useImportStore.getState().open({ kind: 'preview' })
+  }),
+  command('smartPaste', 'hosts', () => {
+    useUiStore.getState().showSection('hosts')
+    useImportStore.getState().open({ kind: 'smartPaste' })
   }),
   command('searchHosts', 'hosts', () => {
     useUiStore.getState().focusHostSearch()

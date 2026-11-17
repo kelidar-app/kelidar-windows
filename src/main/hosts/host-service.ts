@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { groupDefaultsFor, resolveHostSettings } from '@shared/groups'
+import type { HostOs } from '@shared/host-extras'
 import type { HostView, ParsedHostSaveRequest } from '@shared/hosts'
 import type { AuthRequest } from '@shared/keychain'
 import {
@@ -154,6 +155,9 @@ export function toHostView(data: VaultData, host: HostRecord): HostView {
         }),
     ...(host.startupCommand === undefined ? {} : { startupCommand: host.startupCommand }),
     stickySession: host.stickySession === true,
+    ...(host.notes === undefined ? {} : { notes: host.notes }),
+    links: host.links ?? [],
+    ...(host.os === undefined ? {} : { os: host.os }),
     createdAt: host.createdAt,
     updatedAt: host.updatedAt,
     ...(host.lastConnectedAt === undefined ? {} : { lastConnectedAt: host.lastConnectedAt }),
@@ -198,6 +202,8 @@ type OptionalHostField =
   | 'username'
   | 'jumpHostId'
   | 'startupCommand'
+  | 'notes'
+  | 'links'
 
 /** Sets an optional field, or removes it when the value is undefined. */
 function setOptional<K extends OptionalHostField>(
@@ -291,6 +297,10 @@ export class HostService {
         'startupCommand',
         request.startupCommand === '' ? undefined : request.startupCommand,
       )
+      const notes = request.notes?.trim()
+      setOptional(host, 'notes', notes === '' ? undefined : notes)
+      const links = request.links ?? []
+      setOptional(host, 'links', links.length === 0 ? undefined : links)
       const jump = request.jump ?? { type: 'inherit' }
       setOptional(host, 'jumpHostId', jump.type === 'host' ? jump.hostId : undefined)
       if (jump.type === 'none') host.directConnect = true
@@ -438,6 +448,22 @@ export class HostService {
    * Remembers when a session to the host was last ready, for "Recent".
    * Not an edit, so updatedAt stays.
    */
+  /** Whether the host still has no system recorded (read once, after the first connection). */
+  async needsOs(id: Id): Promise<boolean> {
+    const data = (await this.vaults.get()).read()
+    const host = data.hosts.find((item) => item.id === id && live(item))
+    return host !== undefined && host.os === undefined
+  }
+
+  /** Records what /etc/os-release said. Does not count as an edit of the host. */
+  async setOs(id: Id, os: HostOs): Promise<void> {
+    const vault = await this.vaults.get()
+    await vault.update((data) => {
+      const host = data.hosts.find((item) => item.id === id && live(item))
+      if (host !== undefined) host.os = os
+    })
+  }
+
   async markConnected(id: Id): Promise<void> {
     const vault = await this.vaults.get()
     await vault.update((data) => {

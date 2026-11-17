@@ -1,9 +1,10 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { expect, test } from '@playwright/test'
 import { startTestServer, type TestServer } from '../integration/helpers/ssh-server'
-import { closeAll, launch } from './launch'
+import { readableKeyPair } from '../unit/helpers/keys'
+import { closeAll, importDirOf, launch } from './launch'
 
 const PASSWORD = 'e2e-Pass-Osprey-6620'
 
@@ -198,12 +199,14 @@ test('Phase 2 smoke: organize hosts, search, palette and shortcuts', async () =>
     await dialog.getByRole('button', { name: 'Show the command' }).click()
     const command = dialog.locator('[data-upgrade-command]')
     await expect(command).toContainText('~/.ssh/authorized_keys')
-    expect(server.execs).toEqual([])
+    // Only the read-only system check (named in Settings) ran so far.
+    const upgradeExecs = () => server?.execs.filter((run) => run !== 'cat /etc/os-release') ?? []
+    expect(upgradeExecs()).toEqual([])
     const shown = await command.textContent()
     await dialog.getByRole('button', { name: /^Run on / }).click()
     await expect(dialog.getByRole('status')).toContainText('now signs in with a key')
     // Exactly the command that was shown ran on the server.
-    expect(server.execs[0]).toBe(shown)
+    expect(upgradeExecs()[0]).toBe(shown)
     await dialog.getByRole('button', { name: 'Close' }).click()
     await expect(
       page
@@ -529,6 +532,121 @@ test('Phase 2 security: master password, lock screen, backups, export and import
     await app.close()
   } finally {
     await closeAll()
+    await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
+  }
+})
+
+/**
+ * Step 2.6 (Getting data in): the first-run offer finds an ssh config and a
+ * PuTTY session and imports them; the imported key signs in and the host
+ * gets its system badge; Smart Paste fills the host form; notes and links.
+ */
+test('Phase 2 data in: first-run import, system badge, Smart Paste, notes and links', async () => {
+  const userData = await mkdtemp(path.join(os.tmpdir(), 'kelidar-e2e-p2d-'))
+  const key = readableKeyPair('ed25519')
+  const server = await startTestServer({
+    authorizedKey: key.public,
+    osRelease: 'ID=debian\nPRETTY_NAME="Debian GNU/Linux 12 (bookworm)"\n',
+  })
+  try {
+    const importHome = importDirOf(userData)
+    await mkdir(path.join(importHome, '.ssh'), { recursive: true })
+    await writeFile(path.join(importHome, '.ssh', 'lab_key'), key.private)
+    await writeFile(
+      path.join(importHome, '.ssh', 'config'),
+      `Host lab\n  HostName 127.0.0.1\n  Port ${String(server.port)}\n  User tester\n  IdentityFile ~/.ssh/lab_key\n`,
+    )
+    await writeFile(
+      path.join(importHome, 'putty.reg'),
+      [
+        'Windows Registry Editor Version 5.00',
+        '',
+        '[HKEY_CURRENT_USER\\Software\\SimonTatham\\PuTTY\\Sessions\\Old%20Box]',
+        '"HostName"="192.0.2.10"',
+        '"UserName"="admin"',
+        '"Protocol"="ssh"',
+      ].join('\r\n'),
+    )
+
+    let { app, page, consoleErrors } = await launch(userData)
+
+    // First run with an empty vault: the offer, then the preview.
+    let dialog = page.getByRole('dialog', { name: 'Bring your servers with you' })
+    await expect(dialog).toContainText('1 host in your ssh config file')
+    await expect(dialog).toContainText('1 saved PuTTY session')
+    await dialog.getByRole('button', { name: 'Review and import' }).click()
+    dialog = page.getByRole('dialog', { name: 'Import hosts' })
+    await expect(dialog.locator('[data-import-row="lab"]')).toContainText('Key lab_key')
+    await expect(dialog.locator('[data-import-row="Old Box"]')).toContainText('admin@192.0.2.10')
+    await dialog.getByRole('button', { name: 'Import 2 hosts' }).click()
+    await expect(dialog).toBeHidden()
+    await expect(page.locator('[data-notice]')).toContainText('Imported 2 hosts')
+
+    // The imported key signs in; after the first connection the host shows its system.
+    const lab = page.locator('[data-host-item]', { hasText: 'lab' }).first()
+    await lab.focus()
+    await page.keyboard.press('Enter')
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Trust and connect' }).click()
+    await expect(page.locator('[data-tab-state="ready"]')).toHaveCount(1)
+    await page.keyboard.press('Control+1')
+    await expect(lab.locator('[data-os="debian"]')).toHaveAttribute(
+      'title',
+      'Debian GNU/Linux 12 (bookworm)',
+    )
+
+    // Smart Paste: the preview, then the host form filled in for checking.
+    await page.keyboard.press('Control+Shift+B')
+    dialog = page.getByRole('dialog', { name: 'Smart Paste' })
+    await dialog
+      .getByLabel('Text')
+      .fill(
+        'Your server is ready!\nIP: 203.0.113.44\nSSH port: 2200\nUsername: deploy\nPassword: Tr1cky-Pass',
+      )
+    // The preview masks the password it found.
+    const preview = dialog.locator('dl')
+    await expect(preview).toContainText('203.0.113.44')
+    await expect(preview).not.toContainText('Tr1cky-Pass')
+    await dialog.getByRole('button', { name: 'Fill the host form' }).click()
+    const form = page.getByRole('dialog', { name: 'New host' })
+    await expect(form.getByLabel('Address')).toHaveValue('203.0.113.44')
+    await expect(form.getByLabel('User name')).toHaveValue('deploy')
+    await expect(form.getByRole('textbox', { name: 'Password' })).toHaveValue('Tr1cky-Pass')
+    await expect(form.getByLabel('Port')).toHaveValue('2200')
+    await form.getByLabel('Name', { exact: true }).fill('Pasted')
+    await form.getByLabel('Notes').fill('Backups run at 02:00.')
+    await form.getByRole('button', { name: 'Add a link' }).click()
+    await form.getByLabel('Title of link 1').fill('Panel')
+    await form.getByLabel('Address of link 1').fill('file:///C:/Windows')
+    await form.getByRole('button', { name: 'Save' }).click()
+    await expect(form).toContainText('Use a web address')
+    await form.getByLabel('Address of link 1').fill('https://panel.example.test')
+    await form.getByRole('button', { name: 'Save' }).click()
+    await expect(form).toBeHidden()
+
+    const pasted = page.locator('[data-host-item]', { hasText: 'Pasted' }).first()
+    await pasted.getByRole('button', { name: 'Notes and links of Pasted' }).click()
+    dialog = page.getByRole('dialog', { name: 'Notes and links: Pasted' })
+    await expect(dialog.locator('[data-host-notes]')).toHaveText('Backups run at 02:00.')
+    await expect(dialog.getByRole('button', { name: 'Panel' })).toBeVisible()
+    await dialog.getByRole('button', { name: 'Close' }).click()
+
+    // Search finds a host by its notes.
+    await page.keyboard.press('Control+f')
+    await page.keyboard.type('backups')
+    await expect(page.locator('[data-host-item]:visible')).toHaveCount(1)
+
+    expect(consoleErrors).toEqual([])
+    await app.close()
+
+    // The offer is made once.
+    ;({ app, page, consoleErrors } = await launch(userData))
+    await expect(page.locator('[data-host-item]', { hasText: 'Old Box' }).first()).toBeVisible()
+    await expect(page.getByRole('dialog', { name: 'Bring your servers with you' })).toBeHidden()
+    expect(consoleErrors).toEqual([])
+    await app.close()
+  } finally {
+    await closeAll()
+    await server.close()
     await rm(userData, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 })
   }
 })
